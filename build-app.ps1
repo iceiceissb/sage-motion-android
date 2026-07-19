@@ -6,7 +6,7 @@ $sdkHome = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { "D:\software\Andr
 $driveLetter = @("S", "R", "Q", "P") | Where-Object { -not (Test-Path "${_}:\") } | Select-Object -First 1
 
 if (-not $driveLetter) {
-    throw "没有可用的临时盘符。请将项目复制到不含中文的路径后运行 gradlew.bat。"
+    throw "No temporary drive letter is available. Move the project to an ASCII-only path and run gradlew.bat."
 }
 
 $env:JAVA_HOME = $javaHome
@@ -16,8 +16,8 @@ try {
     & subst "${driveLetter}:" $projectRoot
     Push-Location "${driveLetter}:\"
     & .\gradlew.bat testDebugUnitTest assembleDebug
-    if ($LASTEXITCODE -ne 0) { throw "Gradle 构建失败，退出码 $LASTEXITCODE" }
-    Write-Host "构建成功：$projectRoot\app\build\outputs\apk\debug\app-debug.apk"
+    if ($LASTEXITCODE -ne 0) { throw "Gradle build failed with exit code $LASTEXITCODE" }
+    Write-Host "Build succeeded: $projectRoot\app\build\outputs\apk\debug\app-debug.apk"
 }
 finally {
     if ((Get-Location).Path -like "${driveLetter}:*") { Pop-Location }

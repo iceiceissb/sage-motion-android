@@ -12,7 +12,7 @@ git init
 git branch -M main
 git add .
 git commit -m "feat: add SAGE motion experiment Android demo"
-git remote add origin https://github.com/你的用户名/sage-motion-android.git
+git remote add origin https://github.com/李晴芳/sage-motion-android.git
 git push -u origin main
 ```
 
