@@ -37,8 +37,8 @@ interface ParkContextProvider {
 }
 
 /**
- * Keyless environmental context for the online demo. The coordinates are a fixed
- * Tsinghua campus demo point: the app never requests or uploads participant location.
+ * Keyless environmental context for the online demo. The coordinates are fixed at
+ * 东升八家郊野公园南区，保证所有参与者使用同一实验场景，也避免上传参与者实时位置。
  */
 class OpenMeteoParkContextProvider(context: Context) : ParkContextProvider {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -73,7 +73,7 @@ class OpenMeteoParkContextProvider(context: Context) : ParkContextProvider {
             connectTimeout = NETWORK_TIMEOUT_MS
             readTimeout = NETWORK_TIMEOUT_MS
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "SageMotion/0.4.0 academic-research-demo")
+            setRequestProperty("User-Agent", "SageMotion/1.5.0 academic-research-demo")
         }
         return try {
             val status = connection.responseCode
@@ -127,9 +127,9 @@ class OpenMeteoParkContextProvider(context: Context) : ParkContextProvider {
         const val STALE_CACHE_MS = 6 * 60 * 60 * 1_000L
 
         const val WEATHER_URL =
-            "https://api.open-meteo.com/v1/forecast?latitude=40.0030&longitude=116.3260&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=uv_index_max&timezone=Asia%2FShanghai&forecast_days=1"
+            "https://api.open-meteo.com/v1/forecast?latitude=40.01546&longitude=116.32724&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=uv_index_max&timezone=Asia%2FShanghai&forecast_days=1"
         const val AIR_QUALITY_URL =
-            "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=40.0030&longitude=116.3260&current=pm2_5,us_aqi&timezone=Asia%2FShanghai"
+            "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=40.01546&longitude=116.32724&current=pm2_5,us_aqi&timezone=Asia%2FShanghai"
     }
 }
 

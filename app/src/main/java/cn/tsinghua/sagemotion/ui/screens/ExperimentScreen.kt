@@ -103,6 +103,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -111,6 +112,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
@@ -130,6 +132,7 @@ import cn.tsinghua.sagemotion.model.VisionFinding
 import cn.tsinghua.sagemotion.model.JourneyPhotoMoment
 import cn.tsinghua.sagemotion.ui.components.BreathingVoiceOrb
 import cn.tsinghua.sagemotion.ui.components.AdaptiveRouteMotion
+import cn.tsinghua.sagemotion.ui.components.AdoptedRouteMotion
 import cn.tsinghua.sagemotion.ui.components.MemoryWeaveMotion
 import cn.tsinghua.sagemotion.ui.components.ExplorationAmbientMotion
 import cn.tsinghua.sagemotion.ui.components.RouteSemanticMotion
@@ -167,9 +170,11 @@ fun ExperimentScreen(
     onResearcherPanel: (Boolean) -> Unit,
     onHistory: () -> Unit,
     onExport: () -> Unit,
+    onExportCurrentZip: () -> Unit = {},
     onExportAll: () -> Unit,
     onVoiceTranscript: (String) -> Unit,
     onRouteConstraintChanged: (String) -> Unit = {},
+    onReplanRequestChanged: (String) -> Unit = {},
     onRoutePreferenceToggled: (String) -> Unit = {},
     onVisualQuestionAsked: (String) -> Unit = {},
     onClearVisualQuestion: () -> Unit = {},
@@ -177,6 +182,7 @@ fun ExperimentScreen(
     onPhotoCaptured: (Boolean) -> Unit,
     onShareJourney: () -> Unit,
     onBeginJourneySummary: () -> Unit,
+    onRecordMisoperation: () -> Unit = {},
 ) {
     var showExitDialog by rememberSaveable { mutableStateOf(false) }
     val toolScenario = state.scenario in setOf(
@@ -273,6 +279,7 @@ fun ExperimentScreen(
             onAdopt = onAdopt,
             onEvidence = onEvidence,
             onRouteSelected = onRouteSelected,
+            onRequestChanged = onReplanRequestChanged,
             onResearcherPanel = { onResearcherPanel(true) },
             onBack = backToHub,
         )
@@ -298,7 +305,9 @@ fun ExperimentScreen(
             onPreviewNext = onPreviewNext,
             onHistory = onHistory,
             onExport = onExport,
+            onExportCurrentZip = onExportCurrentZip,
             onExportAll = onExportAll,
+            onRecordMisoperation = onRecordMisoperation,
             onFinishSession = onFinishSession,
         )
     }
@@ -329,7 +338,11 @@ private fun ExplorationHub(
     Box(Modifier.fillMaxSize().background(Color(0xFFE5E8E2))) {
         Image(painterResource(R.drawable.park_map_background), "当前路线地图", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .18f)))
-        RouteSemanticMotion(AiStage.COMPLETE, state.condition)
+        if (state.routeReplanned) {
+            AdaptiveRouteMotion(AiStage.COMPLETE, state.condition)
+        } else {
+            AdoptedRouteMotion(state.adoptedRoute, state.condition)
+        }
         ExplorationAmbientMotion(state.capturedPhotoUris.size, state.voiceInteractionCount, state.replanCount)
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {
             AiStatusPanel(state, onResearcherPanel) {}
@@ -340,7 +353,12 @@ private fun ExplorationHub(
             ) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(9.dp).background(Color(0xFF9DE0B6), CircleShape))
-                    Text("湖边林荫线进行中", color = Color.White, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 9.dp).weight(1f))
+                    Text(
+                        "${state.activeRouteName}进行中",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 9.dp).weight(1f),
+                    )
                     Text("可随时调用工具", color = Color.White.copy(alpha = .72f), fontSize = 11.sp)
                 }
             }
@@ -353,12 +371,13 @@ private fun ExplorationHub(
         ) {
             Column(Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 17.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val toolUseCount = state.visualInteractionCount + state.voiceInteractionCount + state.replanCount
                     Column(Modifier.weight(1f)) {
                         Text("探索工作台", color = SageInk, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         Text("功能可以重复使用，不会强制按顺序推进", color = SageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
                     }
                     Surface(color = SageMist, shape = RoundedCornerShape(12.dp)) {
-                        Text("${state.completedTaskCount} 次 AI 任务", color = SageGreenDark, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
+                        Text("$toolUseCount 次工具调用", color = SageGreenDark, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
                     }
                 }
                 if (state.capturedPhotoUris.isNotEmpty()) {
@@ -371,12 +390,12 @@ private fun ExplorationHub(
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 13.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HubActionCard(Icons.Default.CameraAlt, "拍照圈搜", "圈出画面再问", "${state.visualInteractionCount} 次", SageGreen, onPhoto, Modifier.weight(1f))
-                    HubActionCard(Icons.Default.ChatBubbleOutline, "语音对话", "边走边说", "${state.voiceInteractionCount} 次", Color(0xFF4E718B), onVoice, Modifier.weight(1f))
-                    HubActionCard(Icons.AutoMirrored.Filled.AltRoute, "重新规划", "变化随时响应", "${state.replanCount} 次", SageOchre, onReplan, Modifier.weight(1f))
+                    HubActionCard(HubTaskKind.PHOTO, "拍照圈搜", "圈出画面再问", "${state.visualInteractionCount} 次", SageGreen, onPhoto, Modifier.weight(1f))
+                    HubActionCard(HubTaskKind.VOICE, "语音对话", "边走边说", "${state.voiceInteractionCount} 次", Color(0xFF4E718B), onVoice, Modifier.weight(1f))
+                    HubActionCard(HubTaskKind.REPLAN, "重新规划", "变化随时响应", "${state.replanCount} 次", SageOchre, onReplan, Modifier.weight(1f))
                 }
                 Button(onClick = onFinish, modifier = Modifier.fillMaxWidth().padding(top = 13.dp).height(53.dp), shape = RoundedCornerShape(17.dp)) {
-                    Icon(Icons.Default.AutoAwesome, null, Modifier.size(19.dp)); Spacer(Modifier.width(8.dp)); Text("结束探索并生成知识游记", fontSize = 15.sp)
+                    Icon(Icons.Default.AutoAwesome, null, Modifier.size(19.dp)); Spacer(Modifier.width(8.dp)); Text("结束探索并生成知识游记", fontSize = 15.sp, color = Color.White)
                 }
             }
         }
@@ -385,7 +404,7 @@ private fun ExplorationHub(
 
 @Composable
 private fun HubActionCard(
-    icon: ImageVector,
+    kind: HubTaskKind,
     title: String,
     subtitle: String,
     detail: String,
@@ -401,35 +420,58 @@ private fun HubActionCard(
         label = "hubActionPress",
     )
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (pressed) 0.dp else 2.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = .16f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = modifier
             .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .background(Brush.linearGradient(listOf(Color.White.copy(alpha = .98f), accent.copy(alpha = .13f))))
-                .padding(horizontal = 8.dp, vertical = 11.dp),
-        ) {
-            Canvas(Modifier.matchParentSize()) {
-                drawCircle(accent.copy(alpha = .10f), radius = size.minDimension * .46f, center = Offset(size.width * .92f, size.height * .05f))
-                drawCircle(accent.copy(alpha = .08f), radius = size.minDimension * .20f, center = Offset(size.width * .08f, size.height * .92f), style = Stroke(width = 2.5f))
-            }
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(38.dp).background(accent.copy(alpha = .16f), CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(icon, null, tint = accent, modifier = Modifier.size(20.dp))
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Surface(color = accent.copy(alpha = .12f), shape = RoundedCornerShape(8.dp)) {
-                        Text(detail, color = accent, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
-                    }
+        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 11.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                HubTaskGlyph(kind, accent)
+                Spacer(Modifier.weight(1f))
+                Surface(color = accent.copy(alpha = .12f), shape = RoundedCornerShape(100.dp)) {
+                    Text(detail, color = accent, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
                 }
-                Text(title, color = SageInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), maxLines = 1)
-                Text(subtitle, color = SageMuted, fontSize = 9.sp, modifier = Modifier.fillMaxWidth().padding(top = 2.dp), maxLines = 1)
+            }
+            Text(title, color = SageInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), maxLines = 1)
+            Text(subtitle, color = SageMuted, fontSize = 9.sp, modifier = Modifier.fillMaxWidth().padding(top = 3.dp), maxLines = 1)
+        }
+    }
+}
+
+private enum class HubTaskKind { PHOTO, VOICE, REPLAN }
+
+/** 简洁线性图标：不使用大色块、外圈或装饰弧，避免在浅色地图上形成灰边。 */
+@Composable
+private fun HubTaskGlyph(kind: HubTaskKind, accent: Color) {
+    Canvas(Modifier.size(32.dp).padding(3.dp)) {
+        val stroke = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
+        when (kind) {
+            HubTaskKind.PHOTO -> {
+                drawRoundRect(accent, cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx()), style = stroke)
+                drawCircle(accent, radius = size.minDimension * .18f, center = center, style = stroke)
+                drawLine(accent, Offset(size.width * .24f, 0f), Offset(size.width * .43f, 0f), strokeWidth = stroke.width, cap = StrokeCap.Round)
+            }
+            HubTaskKind.VOICE -> {
+                val bars = listOf(.34f, .68f, 1f, .68f, .34f)
+                bars.forEachIndexed { index, fraction ->
+                    val x = size.width * (.12f + index * .19f)
+                    val half = size.height * .36f * fraction
+                    drawLine(accent, Offset(x, center.y - half), Offset(x, center.y + half), strokeWidth = 2.6.dp.toPx(), cap = StrokeCap.Round)
+                }
+            }
+            HubTaskKind.REPLAN -> {
+                val start = Offset(size.width * .18f, size.height * .80f)
+                val fork = Offset(size.width * .48f, size.height * .50f)
+                val upper = Offset(size.width * .82f, size.height * .18f)
+                val lower = Offset(size.width * .82f, size.height * .74f)
+                drawLine(accent, start, fork, strokeWidth = stroke.width, cap = StrokeCap.Round)
+                drawLine(accent, fork, upper, strokeWidth = stroke.width, cap = StrokeCap.Round)
+                drawLine(accent.copy(alpha = .72f), fork, lower, strokeWidth = stroke.width, cap = StrokeCap.Round)
+                listOf(start, fork, upper, lower).forEach { drawCircle(accent, 2.3.dp.toPx(), it) }
             }
         }
     }
@@ -493,7 +535,7 @@ private fun RouteExperiment(
     val constraintSpeech = if (inspection) {
         remember { SpeechInputState("预览模式 · 可用语言补充路线约束", false, .25f) {} }
     } else {
-        rememberRealSpeechInputState(onConstraintChanged)
+        rememberRealSpeechInputState(state.routeConstraintText, onConstraintChanged)
     }
     Box(Modifier.fillMaxSize().background(Color(0xFFE6E7E0))) {
         Image(
@@ -527,7 +569,7 @@ private fun RouteExperiment(
                         state.routeConstraintText.takeIf { it.isNotBlank() }?.let { append(" · $it") }
                     }
                 } else {
-                    "先告诉我你今天想怎么走，再为你计算两条路线"
+                    "先告诉我你今天想怎么走，再为你推荐合适的路线"
                 },
             )
         }
@@ -647,10 +689,11 @@ private fun RouteConstraintCard(
             Text(speech.status, color = if (speech.isListening) SageGreenDark else SageMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
             Button(
                 onClick = onRun,
+                enabled = !speech.isListening,
                 modifier = Modifier.fillMaxWidth().padding(top = 9.dp).height(52.dp),
                 shape = RoundedCornerShape(17.dp),
             ) {
-                Text("按这些约束计算两条路线", fontSize = 15.sp)
+                Text(if (text.isBlank()) "按这些偏好推荐合适路线" else "确认约束并推荐路线", fontSize = 15.sp, color = Color.White)
             }
         }
     }
@@ -822,7 +865,7 @@ private fun StartCard(title: String, actionLabel: String, onRun: () -> Unit, mod
             Text(title, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = SageInk)
             Text("点击后将播放本条件的完整 AI 反馈过程。", color = SageMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 5.dp, bottom = 16.dp))
             Button(onClick = onRun, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(17.dp)) {
-                Text(actionLabel, fontSize = 16.sp)
+                Text(actionLabel, fontSize = 16.sp, color = Color.White)
             }
         }
     }
@@ -859,7 +902,7 @@ private fun VisualStartCard(
                     Icon(Icons.Default.CameraAlt, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text(if (hasPhoto) "重拍" else "实际拍照")
                 }
                 Button(onClick = onRun, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(17.dp)) {
-                    Text("开始识别")
+                    Text("开始识别", color = Color.White)
                 }
             }
         }
@@ -872,6 +915,7 @@ private fun VoiceStartCard(
     speechStatus: String,
     isListening: Boolean,
     onListen: () -> Unit,
+    onTranscriptChanged: (String) -> Unit,
     onRun: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -884,18 +928,51 @@ private fun VoiceStartCard(
         Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp)) {
             Text("边走边问，不必盯着屏幕", fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = SageInk)
             Text(
-                if (transcript.isBlank()) speechStatus else "已转写：“$transcript” · $speechStatus",
+                "可以说话或手动输入，识别文字会写入输入框，确认后再回答。",
                 color = SageMuted,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 5.dp),
             )
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                OutlinedButton(onClick = onListen, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(17.dp)) {
-                    Icon(Icons.Default.Mic, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text(if (isListening) "结束聆听" else if (transcript.isBlank()) "实际语音" else "重新说")
+            Row(
+                Modifier.fillMaxWidth().padding(top = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = transcript,
+                    onValueChange = onTranscriptChanged,
+                    label = { Text("说话或键盘输入问题") },
+                    placeholder = { Text("例如：附近哪里有好吃的？") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(15.dp),
+                )
+                IconButton(
+                    onClick = onListen,
+                    modifier = Modifier.padding(start = 7.dp).size(48.dp).background(
+                        if (isListening) SageGreen else SageMist,
+                        CircleShape,
+                    ),
+                ) {
+                    Icon(
+                        Icons.Default.Mic,
+                        if (isListening) "结束语音输入" else "开始语音输入",
+                        tint = if (isListening) Color.White else SageGreenDark,
+                    )
                 }
-                Button(onClick = onRun, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(17.dp)) {
-                    Text("开始回答")
-                }
+            }
+            Text(
+                speechStatus,
+                color = if (isListening) SageGreenDark else SageMuted,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Button(
+                enabled = transcript.isNotBlank() && !isListening,
+                onClick = onRun,
+                modifier = Modifier.fillMaxWidth().padding(top = 9.dp).height(52.dp),
+                shape = RoundedCornerShape(17.dp),
+            ) {
+                Text("确认问题并回答", color = Color.White)
             }
         }
     }
@@ -968,7 +1045,7 @@ private fun RouteResultPanel(
                 }
             }
             Button(onClick = onAdopt, modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(54.dp), shape = RoundedCornerShape(17.dp)) {
-                Text(result.primaryAction, fontSize = 16.sp)
+                Text(result.primaryAction, fontSize = 16.sp, color = Color.White)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 if (full) TextButton(onClick = onEvidence) { Text("查看依据") }
@@ -1109,10 +1186,16 @@ private fun VisualExperiment(
     onClearQuestion: () -> Unit,
 ) {
     val context = LocalContext.current
+    val inspection = LocalInspectionMode.current
     var circleCenter by remember { mutableStateOf<Offset?>(null) }
     var circleRadius by remember { mutableFloatStateOf(0f) }
-    var circleReady by rememberSaveable(state.capturedPhotoUri) { mutableStateOf(false) }
+    var circleReady by rememberSaveable(state.capturedPhotoUri) { mutableStateOf(inspection && state.resultVisible) }
     var customQuestion by rememberSaveable(state.capturedPhotoUri) { mutableStateOf("") }
+    val questionSpeech = if (inspection) {
+        remember { SpeechInputState("预览模式 · 可说话或键盘输入问题", false, .25f) {} }
+    } else {
+        rememberRealSpeechInputState(customQuestion) { customQuestion = it.take(80) }
+    }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         onPhotoCaptured(success)
     }
@@ -1171,7 +1254,7 @@ private fun VisualExperiment(
         }
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {
             FunctionHeader(state, onBack, onResearcherPanel, onCancel)
-            PromptBubble(state.scenario.participantPrompt)
+            if (!state.resultVisible) PromptBubble(state.scenario.participantPrompt)
         }
         AnimatedVisibility(
             visible = state.isRunning,
@@ -1199,9 +1282,11 @@ private fun VisualExperiment(
             CircleSearchPanel(
                 circleReady = circleReady,
                 findings = state.visionFindings,
+                usesFixedFlowerStimulus = state.capturedPhotoUri == null,
                 question = state.visualQuestion,
                 answer = state.visualAnswer,
                 customQuestion = customQuestion,
+                questionSpeech = questionSpeech,
                 onCustomQuestionChanged = { customQuestion = it.take(80) },
                 onQuestionAsked = onQuestionAsked,
                 onClear = {
@@ -1314,9 +1399,11 @@ private fun CircleSearchOverlay(
 private fun CircleSearchPanel(
     circleReady: Boolean,
     findings: List<VisionFinding>,
+    usesFixedFlowerStimulus: Boolean,
     question: String,
     answer: String?,
     customQuestion: String,
+    questionSpeech: SpeechInputState,
     onCustomQuestionChanged: (String) -> Unit,
     onQuestionAsked: (String) -> Unit,
     onClear: () -> Unit,
@@ -1324,7 +1411,13 @@ private fun CircleSearchPanel(
     onEvidence: (() -> Unit)?,
     onAdopt: () -> Unit,
 ) {
-    val subject = findings.maxByOrNull { it.confidence }?.label ?: "圈选内容"
+    val rawSubject = findings.maxByOrNull { it.confidence }?.label
+    val subject = when {
+        usesFixedFlowerStimulus -> "粉红色花卉"
+        rawSubject.isNullOrBlank() -> "圈选主体"
+        rawSubject in setOf("主体区域", "环境线索", "表面特征", "圈选区域", "圈选内容") -> "圈选主体"
+        else -> rawSubject
+    }
     val panelState = when {
         answer != null -> 2
         circleReady -> 1
@@ -1388,13 +1481,37 @@ private fun CircleSearchPanel(
                                 onValueChange = onCustomQuestionChanged,
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
-                                label = { Text("或者输入自己的问题") },
+                                label = { Text("说话或键盘输入自己的问题") },
                             )
                             IconButton(
-                                onClick = { onQuestionAsked(customQuestion) },
-                                enabled = customQuestion.isNotBlank(),
-                                modifier = Modifier.padding(start = 7.dp).size(48.dp).background(SageGreen, CircleShape),
-                            ) { Icon(Icons.Default.Search, "发送问题", tint = Color.White) }
+                                onClick = questionSpeech.onToggle,
+                                modifier = Modifier.padding(start = 7.dp).size(48.dp).background(
+                                    if (questionSpeech.isListening) SageGreen else SageMist,
+                                    CircleShape,
+                                ),
+                            ) {
+                                Icon(
+                                    Icons.Default.Mic,
+                                    if (questionSpeech.isListening) "完成语音问题" else "语音输入问题",
+                                    tint = if (questionSpeech.isListening) Color.White else SageGreenDark,
+                                )
+                            }
+                        }
+                        Text(
+                            questionSpeech.status,
+                            color = if (questionSpeech.isListening) SageGreenDark else SageMuted,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                        Button(
+                            onClick = { onQuestionAsked(customQuestion) },
+                            enabled = customQuestion.isNotBlank() && !questionSpeech.isListening,
+                            modifier = Modifier.fillMaxWidth().padding(top = 7.dp).height(48.dp),
+                            shape = RoundedCornerShape(14.dp),
+                        ) {
+                            Icon(Icons.Default.Search, null, Modifier.size(17.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("确认问题并提问", color = Color.White)
                         }
                     }
                     else -> {
@@ -1413,7 +1530,7 @@ private fun CircleSearchPanel(
                             if (onEvidence != null) {
                                 OutlinedButton(onClick = onEvidence, modifier = Modifier.weight(.72f).height(49.dp), shape = RoundedCornerShape(15.dp)) { Text("查看依据") }
                             }
-                            Button(onClick = onAdopt, modifier = Modifier.weight(1.28f).height(49.dp), shape = RoundedCornerShape(15.dp)) { Text("保存到游记并返回") }
+                            Button(onClick = onAdopt, modifier = Modifier.weight(1.28f).height(49.dp), shape = RoundedCornerShape(15.dp)) { Text("保存到游记并返回", color = Color.White) }
                         }
                     }
                 }
@@ -1493,7 +1610,7 @@ private fun VoiceExperiment(
     val speechInput = if (inspection) {
         remember { SpeechInputState("预览模式 · 轻触后直接在应用内说话", false, .38f) {} }
     } else {
-        rememberRealSpeechInputState(onVoiceTranscript)
+        rememberRealSpeechInputState(state.voiceTranscript, onVoiceTranscript)
     }
     LaunchedEffect(state.resultVisible, state.taskResult?.summary, ttsReady) {
         if (state.resultVisible && ttsReady) {
@@ -1513,9 +1630,22 @@ private fun VoiceExperiment(
             modifier = Modifier.align(Alignment.Center).padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            BreathingVoiceOrb(active = state.isRunning || speechInput.isListening, stage = if (speechInput.isListening) AiStage.LISTENING else state.aiStage, inputLevel = speechInput.level)
+            BreathingVoiceOrb(
+                active = state.isRunning || speechInput.isListening,
+                stage = if (speechInput.isListening) AiStage.LISTENING else state.aiStage,
+                inputLevel = speechInput.level,
+                modifier = Modifier.clickable(
+                    enabled = !state.isRunning && !state.resultVisible,
+                    onClick = speechInput.onToggle,
+                ),
+            )
             AnimatedContent(
-                targetState = if (state.isRunning && state.condition != ExperimentCondition.BASELINE) state.aiStage.label else if (state.isRunning) "正在处理…" else "轻触开始对话",
+                targetState = when {
+                    speechInput.isListening -> "正在聆听 · 轻触完成"
+                    state.isRunning && state.condition != ExperimentCondition.BASELINE -> state.aiStage.label
+                    state.isRunning -> "正在处理…"
+                    else -> "轻触开始对话"
+                },
                 label = "voiceStage",
                 modifier = Modifier.padding(top = 22.dp),
             ) { label ->
@@ -1535,6 +1665,7 @@ private fun VoiceExperiment(
                 speechStatus = speechInput.status,
                 isListening = speechInput.isListening,
                 onListen = speechInput.onToggle,
+                onTranscriptChanged = onVoiceTranscript,
                 onRun = onRun,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
@@ -1580,7 +1711,7 @@ private fun CreateExperiment(
         )
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {
             FunctionHeader(state, onBack, onResearcherPanel, onCancel)
-            PromptBubble(state.scenario.participantPrompt)
+            if (!state.resultVisible) PromptBubble(state.scenario.participantPrompt)
         }
         AnimatedVisibility(
             visible = state.isRunning && state.aiStage != AiStage.ACTIVATING,
@@ -1602,6 +1733,12 @@ private fun CreateExperiment(
                 JourneyRoutePanel(
                     result = result,
                     moments = journeyMomentsForDisplay(state),
+                    voiceCount = state.voiceInteractionCount,
+                    replanCount = state.replanCount,
+                    routeReplanned = state.routeReplanned,
+                    adoptedRoute = state.adoptedRoute,
+                    voiceTranscripts = state.voiceTranscripts,
+                    voiceTranscript = state.voiceTranscript,
                     showUncertainty = state.condition == ExperimentCondition.SAGE_FULL,
                     onPrimary = onAdopt,
                     onEvidence = if (state.condition == ExperimentCondition.SAGE_FULL) onEvidence else null,
@@ -1637,7 +1774,7 @@ private fun JourneyPreviewCard(state: ExperimentUiState) {
                 modifier = Modifier.fillMaxWidth().padding(top = 11.dp).height(142.dp),
             )
             listOf(
-                Triple(Icons.Default.LocationOn, "湖边林荫线", "路线 · 12 分钟"),
+                Triple(Icons.Default.LocationOn, state.activeRouteName, "路线 · 12 分钟"),
                 Triple(
                     Icons.Default.CameraAlt,
                     state.visionFindings.take(2).joinToString("、") { it.label }.ifBlank { "照片与视觉线索" },
@@ -1761,6 +1898,12 @@ private fun JourneyRoutePreview(
 private fun JourneyRoutePanel(
     result: AiTaskResult,
     moments: List<JourneyPhotoMoment>,
+    voiceCount: Int,
+    replanCount: Int,
+    routeReplanned: Boolean,
+    adoptedRoute: RouteChoice,
+    voiceTranscripts: List<String>,
+    voiceTranscript: String,
     showUncertainty: Boolean,
     onPrimary: () -> Unit,
     onEvidence: (() -> Unit)?,
@@ -1798,10 +1941,36 @@ private fun JourneyRoutePanel(
             }
             JourneyRouteMap(
                 moments = moments,
+                voiceCount = voiceCount,
+                replanCount = replanCount,
+                routeReplanned = routeReplanned,
+                adoptedRoute = adoptedRoute,
                 selectedIndex = selectedIndex,
                 onSelected = { selectedIndex = it },
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(265.dp),
             )
+            if (voiceCount > 0 || replanCount > 0) {
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (voiceCount > 0) {
+                        JourneyMaterialSummary(
+                            icon = Icons.Default.Mic,
+                            title = "$voiceCount 次语音发现",
+                            detail = voiceTranscripts.lastOrNull().orEmpty().ifBlank { voiceTranscript.ifBlank { "沿途语音问答" } }.take(22),
+                            accent = Color(0xFF4E718B),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (replanCount > 0) {
+                        JourneyMaterialSummary(
+                            icon = Icons.AutoMirrored.Filled.AltRoute,
+                            title = if (routeReplanned) "$replanCount 次路线调整" else "$replanCount 次重规划建议",
+                            detail = if (routeReplanned) "未走旧路变灰 · 新路线续行" else "橙色虚线为比较过但未采用的方案",
+                            accent = SageOchre,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
             if (moments.isNotEmpty()) {
                 AnimatedContent(
                     targetState = selectedIndex,
@@ -1834,7 +2003,7 @@ private fun JourneyRoutePanel(
                 OutlinedButton(onClick = onReset, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(15.dp)) { Text("重新生成") }
             }
             Button(onClick = onPrimary, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(53.dp), shape = RoundedCornerShape(17.dp)) {
-                Text(result.primaryAction, fontSize = 15.sp)
+                Text(result.primaryAction, fontSize = 15.sp, color = Color.White)
             }
         }
     }
@@ -1843,6 +2012,10 @@ private fun JourneyRoutePanel(
 @Composable
 private fun JourneyRouteMap(
     moments: List<JourneyPhotoMoment>,
+    voiceCount: Int,
+    replanCount: Int,
+    routeReplanned: Boolean,
+    adoptedRoute: RouteChoice,
     selectedIndex: Int,
     onSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -1868,25 +2041,68 @@ private fun JourneyRouteMap(
         Image(painterResource(R.drawable.park_map_background), "本次步行路线图", Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = .52f)
         Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .18f)))
         Canvas(Modifier.fillMaxSize()) {
-            val fullPath = Path().apply {
-                moveTo(size.width * .06f, size.height * .82f)
-                cubicTo(size.width * .18f, size.height * .48f, size.width * .35f, size.height * .70f, size.width * .49f, size.height * .52f)
-                cubicTo(size.width * .62f, size.height * .35f, size.width * .71f, size.height * .13f, size.width * .93f, size.height * .24f)
-            }
-            drawPath(fullPath, Color.White.copy(alpha = .96f), style = Stroke(width = 15f, cap = StrokeCap.Round))
+            val fullPath = journeyRoutePath(size, routeReplanned, adoptedRoute)
             val measure = PathMeasure().apply { setPath(fullPath, false) }
-            val segment = Path()
-            measure.getSegment(0f, measure.length * reveal, segment, true)
-            drawPath(segment, SageGreenDark, style = Stroke(width = 8f, cap = StrokeCap.Round))
+            drawPath(fullPath, Color.White.copy(alpha = .96f), style = Stroke(width = 15f, cap = StrokeCap.Round))
+            if (routeReplanned) {
+                val oldRoute = journeyRoutePath(size, false, adoptedRoute)
+                val oldMeasure = PathMeasure().apply { setPath(oldRoute, false) }
+                drawPath(oldRoute, Color.White.copy(alpha = .92f), style = Stroke(width = 14f, cap = StrokeCap.Round))
+                val oldUnused = Path()
+                oldMeasure.getSegment(oldMeasure.length * .52f, oldMeasure.length, oldUnused, true)
+                drawPath(oldUnused, Color(0xFF9EA7A2).copy(alpha = .72f), style = Stroke(width = 7f, cap = StrokeCap.Round))
+
+                val active = Path()
+                measure.getSegment(0f, measure.length * reveal, active, true)
+                drawPath(active, Color.White.copy(alpha = .94f), style = Stroke(width = 13f, cap = StrokeCap.Round))
+                drawPath(active, SageGreenDark, style = Stroke(width = 7f, cap = StrokeCap.Round))
+            } else {
+                val segment = Path()
+                measure.getSegment(0f, measure.length * reveal, segment, true)
+                drawPath(segment, SageGreenDark, style = Stroke(width = 8f, cap = StrokeCap.Round))
+
+                if (replanCount > 0) {
+                    val proposedRoute = journeyRoutePath(size, true, adoptedRoute)
+                    val proposedMeasure = PathMeasure().apply { setPath(proposedRoute, false) }
+                    val proposedBranch = Path()
+                    proposedMeasure.getSegment(
+                        proposedMeasure.length * .52f,
+                        proposedMeasure.length,
+                        proposedBranch,
+                        true,
+                    )
+                    drawPath(
+                        proposedBranch,
+                        Color.White.copy(alpha = .90f),
+                        style = Stroke(width = 12f, cap = StrokeCap.Round),
+                    )
+                    drawPath(
+                        proposedBranch,
+                        SageOchre.copy(alpha = .88f),
+                        style = Stroke(
+                            width = 6f,
+                            cap = StrokeCap.Round,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 10f)),
+                        ),
+                    )
+                }
+            }
             drawCircle(SageGreenDark, 9f, Offset(size.width * .06f, size.height * .82f))
             drawCircle(Color.White, 4f, Offset(size.width * .06f, size.height * .82f))
             drawCircle(SageGreenDark, 10f, Offset(size.width * .93f, size.height * .24f))
         }
         BoxWithConstraints(Modifier.fillMaxSize()) {
+            val density = LocalDensity.current
+            val canvasSize = with(density) { androidx.compose.ui.geometry.Size(maxWidth.toPx(), maxHeight.toPx()) }
+            val activeMeasure = PathMeasure().apply { setPath(journeyRoutePath(canvasSize, routeReplanned, adoptedRoute), false) }
             val compactNodes = moments.size > 6
             val nodeSize = if (compactNodes) 48.dp else 62.dp
             moments.take(8).forEachIndexed { index, moment ->
-                val (x, y) = journeyNodePositions[index]
+                val visibleCount = moments.take(8).size
+                val fraction = if (visibleCount == 1) .18f else .14f + index * (.70f / (visibleCount - 1).coerceAtLeast(1))
+                val point = activeMeasure.getPosition(activeMeasure.length * fraction.coerceIn(.10f, .88f))
+                val x = with(density) { point.x.toDp() } - nodeSize / 2
+                val y = with(density) { point.y.toDp() } - nodeSize / 2
                 JourneyPhotoNode(
                     moment = moment,
                     index = index,
@@ -1894,14 +2110,96 @@ private fun JourneyRouteMap(
                     selectedPulse = pulse,
                     compact = compactNodes,
                     onClick = { onSelected(index) },
-                    modifier = Modifier.offset(x = (maxWidth - nodeSize) * x, y = (maxHeight - nodeSize) * y),
+                    modifier = Modifier.offset(x = x, y = y),
                 )
+            }
+            repeat(voiceCount.coerceAtMost(6)) { index ->
+                val visibleVoiceCount = voiceCount.coerceAtMost(6)
+                val fraction = if (visibleVoiceCount == 1) .48f else .30f + index * (.50f / (visibleVoiceCount - 1).coerceAtLeast(1))
+                val point = activeMeasure.getPosition(activeMeasure.length * fraction.coerceIn(.26f, .84f))
+                val x = with(density) { point.x.toDp() } - 17.dp
+                // 语音节点贴在路线正上方，避免和较大的照片节点互相遮挡。
+                val y = with(density) { point.y.toDp() } - 45.dp
+                Surface(
+                    color = Color(0xFF4E718B),
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    shadowElevation = 5.dp,
+                    modifier = Modifier.offset(x = x, y = y).size(34.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Mic, "第 ${index + 1} 次语音节点", modifier = Modifier.padding(8.dp))
+                        Text("${index + 1}", color = Color.White, fontSize = 7.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopEnd).padding(top = 1.dp, end = 3.dp))
+                    }
+                }
+            }
+            if (replanCount > 0) {
+                Surface(
+                    color = if (routeReplanned) SageOchre else SageOchre.copy(alpha = .78f),
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    shadowElevation = 5.dp,
+                    modifier = Modifier.offset(x = maxWidth * .68f, y = maxHeight * .56f).size(36.dp),
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.AltRoute,
+                        if (routeReplanned) "已采用重规划节点" else "未采用重规划建议节点",
+                        modifier = Modifier.padding(8.dp),
+                    )
+                }
             }
         }
         Surface(color = SageGreenDark.copy(alpha = .92f), shape = RoundedCornerShape(10.dp), modifier = Modifier.align(Alignment.TopStart).padding(10.dp)) {
             Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(6.dp).background(Color(0xFF9DE0B6), CircleShape))
-                Text("湖边林荫线 · ${moments.size} 个照片节点", color = Color.White, fontSize = 9.sp, modifier = Modifier.padding(start = 6.dp))
+                Text(
+                    "${when { routeReplanned -> "林下连廊绕行线"; adoptedRoute == RouteChoice.ALTERNATIVE -> "草坪外环线"; else -> "湖边林荫线" }} · ${moments.size} 照片 · $voiceCount 语音 · $replanCount 次重规划",
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
+        }
+    }
+}
+
+private fun journeyRoutePath(
+    size: androidx.compose.ui.geometry.Size,
+    routeReplanned: Boolean,
+    adoptedRoute: RouteChoice,
+): Path = Path().apply {
+    moveTo(size.width * .06f, size.height * .82f)
+    when {
+        routeReplanned -> {
+            cubicTo(size.width * .18f, size.height * .48f, size.width * .35f, size.height * .70f, size.width * .49f, size.height * .52f)
+            cubicTo(size.width * .63f, size.height * .72f, size.width * .82f, size.height * .58f, size.width * .93f, size.height * .24f)
+        }
+        adoptedRoute == RouteChoice.ALTERNATIVE -> {
+            cubicTo(size.width * .24f, size.height * .88f, size.width * .64f, size.height * .78f, size.width * .93f, size.height * .24f)
+        }
+        else -> {
+            cubicTo(size.width * .18f, size.height * .48f, size.width * .35f, size.height * .70f, size.width * .49f, size.height * .52f)
+            cubicTo(size.width * .62f, size.height * .35f, size.width * .71f, size.height * .13f, size.width * .93f, size.height * .24f)
+        }
+    }
+}
+
+@Composable
+private fun JourneyMaterialSummary(
+    icon: ImageVector,
+    title: String,
+    detail: String,
+    accent: Color,
+    modifier: Modifier = Modifier,
+) {
+    Surface(color = accent.copy(alpha = .09f), shape = RoundedCornerShape(16.dp), modifier = modifier) {
+        Row(Modifier.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(color = accent, contentColor = Color.White, shape = CircleShape) {
+                Icon(icon, null, modifier = Modifier.padding(7.dp).size(16.dp))
+            }
+            Column(Modifier.padding(start = 9.dp)) {
+                Text(title, color = SageInk, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(detail, color = SageMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
             }
         }
     }
@@ -1996,16 +2294,25 @@ private fun AdjustExperiment(
     onAdopt: () -> Unit,
     onEvidence: () -> Unit,
     onRouteSelected: (RouteChoice) -> Unit,
+    onRequestChanged: (String) -> Unit,
     onResearcherPanel: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val inspection = LocalInspectionMode.current
+    val requestSpeech = if (inspection) {
+        remember { SpeechInputState("预览模式 · 可语音或手动描述变化", false, .2f) {} }
+    } else {
+        rememberRealSpeechInputState(state.replanRequestText, onRequestChanged)
+    }
     Box(Modifier.fillMaxSize().background(Color(0xFFE5E8E2))) {
         Image(painterResource(R.drawable.park_map_background), "动态路线地图", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .25f)))
         if (state.isRunning || state.resultVisible) AdaptiveRouteMotion(state.aiStage, state.condition)
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {
             FunctionHeader(state, onBack, onResearcherPanel, onCancel)
-            PromptBubble(state.scenario.participantPrompt)
+            if (state.isRunning || state.resultVisible) {
+                PromptBubble(state.replanRequestText.ifBlank { state.scenario.participantPrompt })
+            }
             AnimatedVisibility(state.isRunning && state.aiStage != AiStage.ACTIVATING) {
                 Surface(
                     color = SageWarningSurface.copy(alpha = .94f),
@@ -2036,7 +2343,13 @@ private fun AdjustExperiment(
             ReplanDecisionCard(state.aiStage)
         }
         if (!state.isRunning && !state.resultVisible) {
-            StartCard("前方变化，需要重新规划", state.scenario.actionLabel, onRun, Modifier.align(Alignment.BottomCenter))
+            ReplanInputCard(
+                request = state.replanRequestText,
+                speech = requestSpeech,
+                onRequestChanged = onRequestChanged,
+                onRun = onRun,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         }
         AnimatedVisibility(
             visible = state.resultVisible,
@@ -2053,6 +2366,63 @@ private fun AdjustExperiment(
                     onEvidence = onEvidence,
                     onReset = onReset,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReplanInputCard(
+    request: String,
+    speech: SpeechInputState,
+    onRequestChanged: (String) -> Unit,
+    onRun: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val suggested = "前方临时封路，而且快下雨了，帮我调整路线"
+    Surface(
+        shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
+        color = Color.White,
+        shadowElevation = 10.dp,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp)) {
+            Text("发生了什么变化？", fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = SageInk)
+            Text("可以说话、手动输入，或使用下面的实验示例。", color = SageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
+            FilterChip(
+                selected = request == suggested,
+                onClick = { onRequestChanged(suggested) },
+                label = { Text("示例：封路且即将下雨", fontSize = 11.sp) },
+                modifier = Modifier.padding(top = 9.dp),
+            )
+            Row(Modifier.fillMaxWidth().padding(top = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = request,
+                    onValueChange = onRequestChanged,
+                    label = { Text("描述路线变化") },
+                    placeholder = { Text("例如：前面太拥挤了") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(15.dp),
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(
+                    onClick = speech.onToggle,
+                    modifier = Modifier.padding(start = 7.dp).size(48.dp).background(
+                        if (speech.isListening) SageGreen else SageMist,
+                        CircleShape,
+                    ),
+                ) {
+                    Icon(Icons.Default.Mic, "语音描述变化", tint = if (speech.isListening) Color.White else SageGreenDark)
+                }
+            }
+            Text(speech.status, color = if (speech.isListening) SageGreenDark else SageMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+            Button(
+                enabled = request.isNotBlank() && !speech.isListening,
+                onClick = onRun,
+                modifier = Modifier.fillMaxWidth().padding(top = 9.dp).height(52.dp),
+                shape = RoundedCornerShape(17.dp),
+            ) {
+                Text("确认变化并调整路线", fontSize = 15.sp, color = Color.White)
             }
         }
     }
@@ -2127,7 +2497,7 @@ private fun ResultPanel(
                 )
             }
             Button(onClick = onPrimary, modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(54.dp), shape = RoundedCornerShape(17.dp)) {
-                Text(result.primaryAction, fontSize = 16.sp)
+                Text(result.primaryAction, fontSize = 16.sp, color = Color.White)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 if (onSpeak != null) TextButton(onClick = onSpeak) { Icon(Icons.AutoMirrored.Filled.VolumeUp, null, Modifier.size(17.dp)); Spacer(Modifier.width(5.dp)); Text("播放语音") }
@@ -2250,7 +2620,7 @@ private fun DemoCompleteScreen(
             shape = RoundedCornerShape(17.dp),
             modifier = Modifier.fillMaxWidth().padding(top = 18.dp).height(54.dp),
         ) {
-            Text("重新体验完整流程", fontSize = 16.sp)
+            Text("重新体验完整流程", fontSize = 16.sp, color = Color.White)
         }
         OutlinedButton(
             onClick = onFinish,
@@ -2335,7 +2705,7 @@ private fun EvidenceDialog(evidence: List<String>, onDismiss: () -> Unit) {
                 )
             }
             Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth().height(50.dp)) {
-                Text("完成查看")
+                Text("完成查看", color = Color.White)
             }
             Spacer(Modifier.height(4.dp))
         }
@@ -2356,7 +2726,9 @@ private fun ResearcherPanel(
     onPreviewNext: () -> Unit,
     onHistory: () -> Unit,
     onExport: () -> Unit,
+    onExportCurrentZip: () -> Unit,
     onExportAll: () -> Unit,
+    onRecordMisoperation: () -> Unit,
     onFinishSession: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color.White) {
@@ -2393,7 +2765,7 @@ private fun ResearcherPanel(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 16.dp)) {
-                Button(onClick = { onDismiss(); onRun() }, modifier = Modifier.weight(1f)) { Text("运行任务") }
+                Button(onClick = { onDismiss(); onRun() }, modifier = Modifier.weight(1f)) { Text("运行任务", color = Color.White) }
                 OutlinedButton(onClick = onReset, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(6.dp)); Text("重置") }
             }
             Text("动效状态预览", fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 14.dp))
@@ -2404,8 +2776,22 @@ private fun ResearcherPanel(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 8.dp)) {
                 OutlinedButton(onClick = onNextCondition, modifier = Modifier.weight(1f)) { Text("下一条件") }
-                OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Share, null); Spacer(Modifier.width(6.dp)); Text("导出 CSV") }
+                OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Share, null); Spacer(Modifier.width(6.dp)); Text("测量 CSV") }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 8.dp)) {
+                OutlinedButton(onClick = onRecordMisoperation, modifier = Modifier.weight(1f)) {
+                    Text("补记误操作 +1")
+                }
+                OutlinedButton(onClick = onExportCurrentZip, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Archive, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("本次 ZIP")
+                }
+            }
+            Text(
+                "当前任务：误操作 ${state.taskMisoperationCount} 次 · 尝试 ${state.taskAttemptCount} 次",
+                color = SageMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 7.dp),
+            )
             HorizontalDivider(Modifier.padding(vertical = 14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = onHistory, modifier = Modifier.weight(1f)) {

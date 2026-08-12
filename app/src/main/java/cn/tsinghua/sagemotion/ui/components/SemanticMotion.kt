@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import cn.tsinghua.sagemotion.model.AiStage
 import cn.tsinghua.sagemotion.model.ExperimentCondition
+import cn.tsinghua.sagemotion.model.RouteChoice
 import cn.tsinghua.sagemotion.ui.theme.SageGreen
 import cn.tsinghua.sagemotion.ui.theme.SageGreenDark
 import cn.tsinghua.sagemotion.ui.theme.SageMist
@@ -175,6 +176,39 @@ fun RouteSemanticMotion(
             drawCircle(Color.White.copy(alpha = .90f), (12f + breathe * 3f).dp.toPx(), destination)
             drawCircle(if (stage == AiStage.UNCERTAIN && full) SageOchre else SageGreen, 8.dp.toPx(), destination)
         }
+    }
+}
+
+/** 探索阶段只强调参与者真正采纳的路线，另一条退到背景中。 */
+@Composable
+fun AdoptedRouteMotion(
+    choice: RouteChoice,
+    condition: ExperimentCondition,
+    modifier: Modifier = Modifier,
+) {
+    val reveal by animateFloatAsState(1f, tween(900), label = "adoptedRouteReveal")
+    Canvas(modifier.fillMaxSize()) {
+        val main = routePath(size)
+        val alternative = alternativeRoutePath(size)
+        val selected = if (choice == RouteChoice.ALTERNATIVE) alternative else main
+        val unselected = if (choice == RouteChoice.ALTERNATIVE) main else alternative
+        val measure = PathMeasure().apply { setPath(selected, false) }
+        val visible = Path()
+        measure.getSegment(0f, measure.length * reveal, visible, true)
+        drawPath(unselected, Color.White.copy(alpha = .42f), style = Stroke(9.dp.toPx(), cap = StrokeCap.Round))
+        drawPath(unselected, SageGreenDark.copy(alpha = .10f), style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+        drawPath(visible, Color.White.copy(alpha = .96f), style = Stroke(12.dp.toPx(), cap = StrokeCap.Round))
+        drawPath(
+            visible,
+            if (choice == RouteChoice.ALTERNATIVE) SageOchre else SageGreen,
+            style = Stroke(if (condition == ExperimentCondition.BASELINE) 5.dp.toPx() else 6.dp.toPx(), cap = StrokeCap.Round),
+        )
+        val start = measure.getPosition(0f)
+        val destination = measure.getPosition(measure.length)
+        drawCircle(Color.White, 11.dp.toPx(), start)
+        drawCircle(SageGreenDark, 6.dp.toPx(), start)
+        drawCircle(Color.White, 12.dp.toPx(), destination)
+        drawCircle(if (choice == RouteChoice.ALTERNATIVE) SageOchre else SageGreen, 8.dp.toPx(), destination)
     }
 }
 
@@ -471,6 +505,19 @@ fun VisualSemanticMotion(
 
         if (stage == AiStage.RECOGNIZING || stage == AiStage.REASONING) {
             val y = top + height * scan
+
+            // 扫描幕与场景结合：扫描线不是一条平的横线，而是带轻微透视的弧，
+            // 越靠近画面底部（近景）弧度越大，读起来像是掠过真实空间而不是贴在屏幕上。
+            val perspective = (scan - .5f) * 2f
+            val bow = perspective * 14.dp.toPx()
+            val sweep = Path().apply {
+                moveTo(left + 10.dp.toPx(), y)
+                cubicTo(
+                    left + width * .33f, y + bow,
+                    left + width * .67f, y + bow,
+                    left + width - 10.dp.toPx(), y,
+                )
+            }
             drawRect(
                 brush = Brush.verticalGradient(
                     listOf(Color.Transparent, SageMist.copy(alpha = .12f), SageMist.copy(alpha = .68f), SageMist.copy(alpha = .12f), Color.Transparent),
@@ -480,7 +527,22 @@ fun VisualSemanticMotion(
                 topLeft = Offset(left + 3.dp.toPx(), y - 46.dp.toPx()),
                 size = Size(width - 6.dp.toPx(), 92.dp.toPx()),
             )
-            drawLine(Color.White.copy(alpha = .9f), Offset(left + 10.dp.toPx(), y), Offset(left + width - 10.dp.toPx(), y), 2.dp.toPx())
+            drawPath(sweep, Color.White.copy(alpha = .90f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+
+            // 景深栅格：扫描线经过时在其上下留下两道更淡的伴随线，
+            // 表达「同一深度层被一起处理」，而不是逐像素扫。
+            listOf(-1f, 1f).forEach { side ->
+                val ghostY = y + side * 22.dp.toPx()
+                if (ghostY in top..(top + height)) {
+                    drawLine(
+                        SageMist.copy(alpha = .22f),
+                        Offset(left + 24.dp.toPx(), ghostY),
+                        Offset(left + width - 24.dp.toPx(), ghostY),
+                        1.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 14f), -orbit * 28f),
+                    )
+                }
+            }
         }
 
         val features = listOf(
@@ -499,15 +561,44 @@ fun VisualSemanticMotion(
             focusBoxes.forEachIndexed { index, (origin, boxSize) ->
                 val appear = (focusReveal * 2.1f - index * .30f).coerceIn(0f, 1f)
                 val expanded = Size(boxSize.width * appear, boxSize.height * appear)
+                val boxOrigin = origin + Offset((boxSize.width - expanded.width) / 2f, (boxSize.height - expanded.height) / 2f)
                 drawRoundRect(
                     color = Color.White.copy(alpha = appear * .58f),
-                    topLeft = origin + Offset((boxSize.width - expanded.width) / 2f, (boxSize.height - expanded.height) / 2f),
+                    topLeft = boxOrigin,
                     size = expanded,
                     cornerRadius = CornerRadius(10.dp.toPx()),
                     style = Stroke(1.4.dp.toPx(), pathEffect = if (stage == AiStage.REASONING) PathEffect.dashPathEffect(floatArrayOf(8f, 6f), -orbit * 24f) else null),
                 )
+
+                // 目标锁定：四个角标从外向内收拢并停住。
+                // 这是「AI 已经把注意力放在这一块」的可读时刻，而不是一个持续闪烁的框。
+                val lock = ((appear - .35f) / .65f).coerceIn(0f, 1f)
+                if (lock > 0f) {
+                    val armLength = 9.dp.toPx() * lock
+                    val slack = (1f - lock) * 10.dp.toPx()
+                    val corners = listOf(
+                        Triple(boxOrigin + Offset(-slack, -slack), 1f, 1f),
+                        Triple(boxOrigin + Offset(expanded.width + slack, -slack), -1f, 1f),
+                        Triple(boxOrigin + Offset(-slack, expanded.height + slack), 1f, -1f),
+                        Triple(boxOrigin + Offset(expanded.width + slack, expanded.height + slack), -1f, -1f),
+                    )
+                    corners.forEach { (corner, dx, dy) ->
+                        val color = Color.White.copy(alpha = .55f + lock * .40f)
+                        drawLine(color, corner, corner + Offset(armLength * dx, 0f), 2.dp.toPx(), StrokeCap.Round)
+                        drawLine(color, corner, corner + Offset(0f, armLength * dy), 2.dp.toPx(), StrokeCap.Round)
+                    }
+                }
+
                 if (appear > .72f) {
+                    // 置信度条：长度表示这一块的把握程度，让候选之间可比较。
                     val indicatorWidth = boxSize.width * (.34f + index * .13f)
+                    drawLine(
+                        SageMist.copy(alpha = appear * .30f),
+                        origin + Offset(0f, boxSize.height + 7.dp.toPx()),
+                        origin + Offset(boxSize.width, boxSize.height + 7.dp.toPx()),
+                        3.dp.toPx(),
+                        StrokeCap.Round,
+                    )
                     drawLine(
                         SageMist.copy(alpha = appear * .88f),
                         origin + Offset(0f, boxSize.height + 7.dp.toPx()),
@@ -631,13 +722,32 @@ fun BreathingVoiceOrb(active: Boolean, stage: AiStage, modifier: Modifier = Modi
     }
 }
 
-private fun routePath(size: Size): Path = Path().apply {
-    moveTo(size.width * .13f, size.height * .57f)
-    cubicTo(size.width * .28f, size.height * .49f, size.width * .35f, size.height * .40f, size.width * .49f, size.height * .38f)
-    cubicTo(size.width * .63f, size.height * .36f, size.width * .70f, size.height * .27f, size.width * .84f, size.height * .25f)
+// 路线几何统一由 RouteGeometry 提供，保证语义动效、地标层和手账拼贴落在同一条线上。
+private fun routePath(size: Size): Path = RouteGeometry.main(size)
+
+private fun alternativeRoutePath(size: Size): Path = RouteGeometry.alternative(size)
+
+/**
+ * 主路线在各阶段的显影目标值。
+ *
+ * 单独暴露出来，是为了让沿途地标层能用完全相同的进度动画：
+ * 地标必须在路线「算到那里」之后才落位，两套动画不能各算各的。
+ */
+fun routeRevealTarget(stage: AiStage): Float = when (stage) {
+    AiStage.ACTIVATING -> .06f
+    AiStage.LOCATING -> .43f
+    AiStage.REASONING -> .88f
+    AiStage.UNCERTAIN, AiStage.COMPLETE -> 1f
+    else -> 0f
 }
 
-private fun alternativeRoutePath(size: Size): Path = Path().apply {
-    moveTo(size.width * .13f, size.height * .57f)
-    cubicTo(size.width * .29f, size.height * .62f, size.width * .54f, size.height * .59f, size.width * .84f, size.height * .25f)
+/** 与 [RouteSemanticMotion] 内部共用同一条时间曲线的路线显影进度。 */
+@Composable
+fun rememberRouteReveal(stage: AiStage): Float {
+    val reveal by animateFloatAsState(
+        targetValue = routeRevealTarget(stage),
+        animationSpec = tween(1080),
+        label = "sharedRouteReveal",
+    )
+    return reveal
 }

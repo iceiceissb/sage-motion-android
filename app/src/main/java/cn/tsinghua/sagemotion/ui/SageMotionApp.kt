@@ -8,7 +8,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cn.tsinghua.sagemotion.ExperimentViewModel
 import cn.tsinghua.sagemotion.ui.screens.ExperimentScreen
 import cn.tsinghua.sagemotion.ui.screens.HistoryScreen
+import cn.tsinghua.sagemotion.ui.screens.PostTaskSurveyScreen
 import cn.tsinghua.sagemotion.ui.screens.ResearcherSetupScreen
+import cn.tsinghua.sagemotion.ui.screens.WelcomeScreen
 
 @Composable
 fun SageMotionApp(viewModel: ExperimentViewModel = viewModel()) {
@@ -29,6 +31,9 @@ fun SageMotionApp(viewModel: ExperimentViewModel = viewModel()) {
             onExportSession = { fileName ->
                 launchShare(viewModel.createSessionShareIntent(fileName), "导出本次实验日志")
             },
+            onShareJourney = { fileName ->
+                launchShare(viewModel.createHistoryJourneyShareIntent(fileName), "分享历史知识游记")
+            },
             onExportAll = {
                 launchShare(viewModel.createAllSessionsShareIntent(), "导出全部实验数据")
             },
@@ -44,6 +49,24 @@ fun SageMotionApp(viewModel: ExperimentViewModel = viewModel()) {
             onHistory = viewModel::openHistory,
             savedSessionCount = state.historySessions.size,
             statusMessage = state.statusMessage,
+        )
+        return
+    }
+
+    // 开屏欢迎动画：研究员设置完成后、第一个任务之前播放一次，建立场景代入感。
+    // 可随时跳过，恢复会话时不重播。
+    if (!state.welcomeShown) {
+        WelcomeScreen(
+            participantId = state.participantId,
+            onEnter = viewModel::completeWelcome,
+        )
+        return
+    }
+
+    state.pendingPostTaskSurvey?.let { performance ->
+        PostTaskSurveyScreen(
+            performance = performance,
+            onSubmit = viewModel::submitPostTaskSurvey,
         )
         return
     }
@@ -69,11 +92,15 @@ fun SageMotionApp(viewModel: ExperimentViewModel = viewModel()) {
         onExport = {
             launchShare(viewModel.createCurrentShareIntent(), "导出实验日志")
         },
+        onExportCurrentZip = {
+            launchShare(viewModel.createCurrentSessionArchiveShareIntent(), "导出本次会话 ZIP")
+        },
         onExportAll = {
             launchShare(viewModel.createAllSessionsShareIntent(), "导出全部实验数据")
         },
         onVoiceTranscript = viewModel::setVoiceTranscript,
         onRouteConstraintChanged = viewModel::setRouteConstraint,
+        onReplanRequestChanged = viewModel::setReplanRequest,
         onRoutePreferenceToggled = viewModel::toggleRoutePreference,
         onVisualQuestionAsked = viewModel::askVisualQuestion,
         onClearVisualQuestion = viewModel::clearVisualQuestion,
@@ -83,5 +110,6 @@ fun SageMotionApp(viewModel: ExperimentViewModel = viewModel()) {
             launchShare(viewModel.createJourneyShareIntent(), "分享知识游记")
         },
         onBeginJourneySummary = viewModel::beginJourneySummary,
+        onRecordMisoperation = viewModel::recordMisoperation,
     )
 }

@@ -1,23 +1,28 @@
 package cn.tsinghua.sagemotion.ui.screens
 
 import android.Manifest
-import android.content.Intent
+import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import org.json.JSONObject
+import org.vosk.Model
+import org.vosk.Recognizer
+import org.vosk.android.RecognitionListener
+import org.vosk.android.SpeechService
+import org.vosk.android.StorageService
 
 data class SpeechInputState(
     val status: String,
@@ -26,76 +31,153 @@ data class SpeechInputState(
     val onToggle: () -> Unit,
 )
 
+/**
+ * 应用自带的免费离线中文语音识别。
+ *
+ * 不再依赖厂商是否安装 Android RecognitionService：首次进入语音界面时，Vosk 会把
+ * APK assets 中的 42 MB 中文移动端模型解包到应用私有目录，随后直接读取麦克风并转写。
+ */
 @Composable
-fun rememberRealSpeechInputState(onTranscript: (String) -> Unit): SpeechInputState {
+fun rememberRealSpeechInputState(
+    currentText: String,
+    onTranscript: (String) -> Unit,
+): SpeechInputState {
     val context = LocalContext.current
+    val latestTranscriptHandler by rememberUpdatedState(onTranscript)
+    val latestText by rememberUpdatedState(currentText)
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    var model by remember { mutableStateOf<Model?>(null) }
+    var speechService by remember { mutableStateOf<SpeechService?>(null) }
     var isListening by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("轻触后直接在应用内说话") }
+    var status by remember { mutableStateOf("正在准备离线中文语音识别…") }
     var level by remember { mutableFloatStateOf(0f) }
-    val recognizer = remember(context) {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+    var sessionBase by remember { mutableStateOf("") }
+    var committedSpeech by remember { mutableStateOf("") }
+    var partialSpeech by remember { mutableStateOf("") }
+    var recognitionSession by remember { mutableStateOf(0) }
+
+    fun shutdownService(requestStop: Boolean = false) {
+        if (requestStop) speechService?.stop()
+        speechService?.shutdown()
+        speechService = null
+        isListening = false
+        level = 0f
     }
-    val recognitionIntent = remember {
-        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+
+    fun transcriptFrom(payload: String, key: String): String = runCatching {
+        normalizeMandarinTranscript(JSONObject(payload).optString(key))
+    }.getOrDefault("")
+
+    fun appendCommitted(text: String) {
+        if (text.isBlank() || committedSpeech == text || committedSpeech.endsWith(text)) return
+        committedSpeech = listOf(committedSpeech, text).filter { it.isNotBlank() }.joinToString("，")
+    }
+
+    fun mergedTranscript(includePartial: Boolean): String {
+        val spoken = listOf(committedSpeech, partialSpeech.takeIf { includePartial }.orEmpty())
+            .filter { it.isNotBlank() }
+            .joinToString("，")
+        return listOf(sessionBase, spoken).filter { it.isNotBlank() }.joinToString("；")
+    }
+
+    fun publishTranscript(includePartial: Boolean) {
+        mergedTranscript(includePartial).takeIf { it.isNotBlank() }?.let(latestTranscriptHandler)
+    }
+
+    fun acceptTranscript(text: String) {
+        appendCommitted(text.ifBlank { partialSpeech })
+        partialSpeech = ""
+        shutdownService()
+        val merged = mergedTranscript(includePartial = false)
+        if (committedSpeech.isBlank()) {
+            status = "没有听清，请再说一次"
+        } else {
+            latestTranscriptHandler(merged)
+            status = "转写完成，已写入输入框；请确认或修改后提交"
         }
     }
-    DisposableEffect(recognizer) {
-        recognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) { isListening = true; level = .08f; status = "正在听，请开始说话…" }
-            override fun onBeginningOfSpeech() { status = "正在记录你的问题…" }
-            override fun onRmsChanged(rmsdB: Float) { level = ((rmsdB + 2f) / 12f).coerceIn(.04f, 1f) }
-            override fun onBufferReceived(buffer: ByteArray?) = Unit
-            override fun onEndOfSpeech() { isListening = false; level = 0f; status = "正在转写…" }
-            override fun onError(error: Int) {
-                isListening = false
-                level = 0f
-                status = when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH -> "没有听清，请再试一次"
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "没有检测到语音，请靠近麦克风"
-                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "需要麦克风权限才能使用实际语音"
-                    else -> "语音服务暂时不可用（错误 $error）"
+
+    val listener = remember {
+        object : RecognitionListener {
+            override fun onPartialResult(hypothesis: String) {
+                val partial = transcriptFrom(hypothesis, "partial")
+                if (partial.isNotBlank()) mainHandler.post {
+                    partialSpeech = partial
+                    publishTranscript(includePartial = true)
+                    status = "正在听：$partial"
                 }
             }
-            override fun onResults(results: Bundle?) {
-                isListening = false
-                level = 0f
-                val transcript = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (transcript.isNullOrBlank()) {
-                    status = "没有获得转写结果，请重试"
-                } else {
-                    onTranscript(transcript)
-                    status = "转写完成，可以开始回答"
+
+            override fun onResult(hypothesis: String) {
+                val text = transcriptFrom(hypothesis, "text")
+                if (text.isNotBlank()) mainHandler.post {
+                    appendCommitted(text)
+                    partialSpeech = ""
+                    publishTranscript(includePartial = false)
+                    status = "已识别，可继续说；说完后点“完成”"
                 }
             }
-            override fun onPartialResults(partialResults: Bundle?) {
-                partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let { partial ->
-                    if (partial.isNotBlank()) status = "正在听：$partial"
+
+            override fun onFinalResult(hypothesis: String) {
+                val text = transcriptFrom(hypothesis, "text")
+                mainHandler.post { acceptTranscript(text) }
+            }
+
+            override fun onError(exception: Exception) {
+                mainHandler.post {
+                    shutdownService()
+                    status = "离线识别未完成，请检查麦克风后重试"
                 }
             }
-            override fun onEvent(eventType: Int, params: Bundle?) = Unit
-        })
-        onDispose { recognizer?.cancel(); recognizer?.destroy() }
+
+            override fun onTimeout() {
+                mainHandler.post {
+                    shutdownService()
+                    status = "没有检测到语音，请靠近麦克风重试"
+                }
+            }
+        }
     }
 
     fun beginRecognition() {
-        if (recognizer == null) {
-            status = "当前设备没有可用的系统语音识别服务"
+        if (isListening) {
+            speechService?.stop()
+            val stoppingSession = recognitionSession
+            status = "正在完成转写，请稍候…"
+            mainHandler.postDelayed({
+                if (isListening && recognitionSession == stoppingSession) {
+                    acceptTranscript(partialSpeech)
+                }
+            }, FINAL_RESULT_GRACE_MS)
             return
         }
-        if (isListening) {
-            recognizer.stopListening()
-        } else {
-            runCatching { recognizer.startListening(recognitionIntent) }
-                .onFailure { status = "无法启动语音服务：${it.javaClass.simpleName}" }
+        val readyModel = model
+        if (readyModel == null) {
+            status = "离线中文模型仍在准备，请稍候再试"
+            return
+        }
+        runCatching {
+            recognitionSession += 1
+            sessionBase = latestText.trim()
+            committedSpeech = ""
+            partialSpeech = ""
+            val recognizer = Recognizer(readyModel, SAMPLE_RATE)
+            SpeechService(recognizer, SAMPLE_RATE).also { service ->
+                speechService = service
+                service.startListening(listener)
+            }
+        }.onSuccess {
+            isListening = true
+            level = .58f
+            status = "正在听，请开始说话；说完后点“结束”"
+        }.onFailure {
+            shutdownService()
+            status = "麦克风启动失败，请重新授权后再试"
         }
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) beginRecognition() else status = "麦克风权限被拒绝，可在系统设置中重新允许"
+        if (granted) beginRecognition() else status = "需要麦克风权限才能听懂语音"
     }
     val toggle = {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -104,5 +186,39 @@ fun rememberRealSpeechInputState(onTranscript: (String) -> Unit): SpeechInputSta
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
+
+    DisposableEffect(context) {
+        StorageService.unpack(
+            context,
+            MODEL_ASSET,
+            MODEL_TARGET,
+            { loaded ->
+                mainHandler.post {
+                    model = loaded
+                    status = "离线中文语音已就绪，轻触“语音”开始"
+                }
+            },
+            { error ->
+                mainHandler.post {
+                    status = "离线语音模型准备失败：${error.message.orEmpty().take(36)}"
+                }
+            },
+        )
+        onDispose {
+            shutdownService(requestStop = true)
+            model?.close()
+            model = null
+        }
+    }
     return SpeechInputState(status, isListening, level, toggle)
 }
+
+private const val SAMPLE_RATE = 16_000f
+private const val FINAL_RESULT_GRACE_MS = 900L
+private const val MODEL_ASSET = "vosk-model-small-cn-0.22"
+private const val MODEL_TARGET = "vosk-model-cn"
+
+private fun normalizeMandarinTranscript(text: String): String = text
+    .trim()
+    .replace(Regex("(?<=[\\u4E00-\\u9FFF])\\s+(?=[\\u4E00-\\u9FFF])"), "")
+    .replace(Regex("\\s+"), " ")

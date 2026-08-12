@@ -9,6 +9,7 @@ captures/
 *.jks
 *.keystore
 experiment-exports/
+release-artifacts/
 
 
 .kotlin/

@@ -39,4 +39,27 @@ class MockAiDemoApiTest {
         assertTrue((adjustment.last() as AiTaskEvent.Completed).result.title.contains("调整"))
         assertTrue(adjustment.filterIsInstance<AiTaskEvent.StageChanged>().any { it.stage == AiStage.REPLANNING })
     }
+
+    @Test
+    fun freeLocalVoiceAnswersBasicParkQuestions() = runBlocking {
+        val api = MockAiDemoApi(waitFor = {})
+        val restroom = api.runTask(AiTaskRequest(ExperimentScenario.VOICE, "最近的洗手间在哪里？")).toList()
+        val flower = api.runTask(AiTaskRequest(ExperimentScenario.VOICE, "附近有什么花？")).toList()
+
+        val restroomResult = (restroom.last() as AiTaskEvent.Completed).result
+        val flowerResult = (flower.last() as AiTaskEvent.Completed).result
+        assertTrue(restroomResult.summary.contains("南门"))
+        assertTrue(flowerResult.summary.contains("花境"))
+        assertEquals("Vosk 离线语音 · 本地 Agent 路由", restroomResult.sourceLabel)
+    }
+
+    @Test
+    fun spacedOfflineFoodQuestionGetsSafeToolFallback() = runBlocking {
+        val api = MockAiDemoApi(waitFor = {})
+        val events = api.runTask(AiTaskRequest(ExperimentScenario.VOICE, "附近 有 哪里 有 好 吃 的")).toList()
+        val result = (events.last() as AiTaskEvent.Completed).result
+
+        assertTrue(result.title.contains("餐饮"))
+        assertTrue(result.summary.contains("OpenStreetMap"))
+    }
 }

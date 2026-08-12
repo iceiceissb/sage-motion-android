@@ -1,0 +1,5 @@
+The bundled vosk-model-small-cn-0.22 speech-recognition model is distributed
+by Alpha Cephei under the Apache License 2.0.
+
+Source: https://alphacephei.com/vosk/models
+Model: vosk-model-small-cn-0.22

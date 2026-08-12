@@ -3,4 +3,5 @@
     <files-path name="experiment_logs" path="experiment_logs/" />
     <files-path name="experiment_exports" path="experiment_exports/" />
     <cache-path name="camera_captures" path="camera_captures/" />
+    <cache-path name="journey_shares" path="journey_shares/" />
 </paths>

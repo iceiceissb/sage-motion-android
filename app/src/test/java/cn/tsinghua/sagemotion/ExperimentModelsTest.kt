@@ -6,8 +6,11 @@ import cn.tsinghua.sagemotion.model.ExperimentCondition
 import cn.tsinghua.sagemotion.model.ExperimentScenario
 import cn.tsinghua.sagemotion.model.JourneyPhotoMoment
 import cn.tsinghua.sagemotion.model.JourneyQuestion
+import cn.tsinghua.sagemotion.model.ExperimentUiState
+import cn.tsinghua.sagemotion.model.RouteChoice
 import cn.tsinghua.sagemotion.model.stageSequenceFor
 import cn.tsinghua.sagemotion.model.nextScenarioAfter
+import cn.tsinghua.sagemotion.model.SurveyDimension
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,11 +18,36 @@ import org.junit.Test
 class ExperimentModelsTest {
     @Test
     fun latinSquareContainsAllConditionsExactlyOncePerOrder() {
-        ConditionOrder.entries.forEach { order ->
+        ConditionOrder.entries.filterNot { it.isPairedComparison }.forEach { order ->
             assertEquals(3, order.conditions.size)
             assertEquals(3, order.conditions.distinct().size)
             assertTrue(order.conditions.containsAll(ExperimentCondition.entries))
         }
+    }
+
+    @Test
+    fun pairedComparisonContainsBaselineAndSageExactlyOnce() {
+        ConditionOrder.entries.filter { it.isPairedComparison }.forEach { order ->
+            assertEquals(2, order.conditions.size)
+            assertEquals(2, order.conditions.distinct().size)
+            assertTrue(order.conditions.contains(ExperimentCondition.BASELINE))
+            assertTrue(order.conditions.contains(ExperimentCondition.SAGE_FULL))
+        }
+    }
+
+    @Test
+    fun postTaskSurveyHasFiveStableSevenPointDimensions() {
+        assertEquals(5, SurveyDimension.entries.size)
+        assertEquals(
+            listOf(
+                "state_recognition",
+                "process_understanding",
+                "calibrated_trust",
+                "perceived_control",
+                "workload",
+            ),
+            SurveyDimension.entries.map { it.exportId },
+        )
     }
 
     @Test
@@ -69,5 +97,12 @@ class ExperimentModelsTest {
         assertEquals("content://photo/1", moment.photoUri)
         assertEquals(2, moment.questions.size)
         assertEquals("为什么在这里？", moment.questions.last().question)
+    }
+
+    @Test
+    fun adoptedAlternativeRouteSurvivesBeyondTheResultPanel() {
+        val state = ExperimentUiState(adoptedRoute = RouteChoice.ALTERNATIVE)
+        assertEquals("草坪外环线", state.activeRouteName)
+        assertEquals("林下连廊绕行线", state.copy(routeReplanned = true).activeRouteName)
     }
 }

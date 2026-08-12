@@ -1,3 +1,7 @@
+param(
+    [string[]]$GradleTasks = @("testDebugUnitTest", "assembleDebug")
+)
+
 $ErrorActionPreference = "Stop"
 
 $projectRoot = $PSScriptRoot
@@ -15,9 +19,14 @@ $env:ANDROID_HOME = $sdkHome
 try {
     & subst "${driveLetter}:" $projectRoot
     Push-Location "${driveLetter}:\"
-    & .\gradlew.bat testDebugUnitTest assembleDebug
+    # A daemon started on a temporary subst drive keeps that drive as its working directory.
+    # The drive is removed after each build, so a later invocation can fail before Gradle starts.
+    & .\gradlew.bat --no-daemon @GradleTasks
     if ($LASTEXITCODE -ne 0) { throw "Gradle build failed with exit code $LASTEXITCODE" }
-    Write-Host "Build succeeded: $projectRoot\app\build\outputs\apk\debug\app-debug.apk"
+    Write-Host "Gradle tasks succeeded: $($GradleTasks -join ', ')"
+    if ($GradleTasks -contains "assembleDebug") {
+        Write-Host "APK: $projectRoot\app\build\outputs\apk\debug\app-debug.apk"
+    }
 }
 finally {
     if ((Get-Location).Path -like "${driveLetter}:*") { Pop-Location }

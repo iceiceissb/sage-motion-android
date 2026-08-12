@@ -11,9 +11,30 @@ import cn.tsinghua.sagemotion.model.SessionSummary
 import cn.tsinghua.sagemotion.model.VisionFinding
 import cn.tsinghua.sagemotion.model.JourneyPhotoMoment
 import cn.tsinghua.sagemotion.model.JourneyQuestion
+import cn.tsinghua.sagemotion.model.TaskPerformance
+import cn.tsinghua.sagemotion.model.RouteChoice
 import cn.tsinghua.sagemotion.ui.screens.ExperimentScreen
 import cn.tsinghua.sagemotion.ui.screens.HistoryScreen
+import cn.tsinghua.sagemotion.ui.screens.PostTaskSurveyScreen
 import cn.tsinghua.sagemotion.ui.theme.SageMotionTheme
+
+@Preview(name = "Post-task Survey", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+fun PostTaskSurveyScreenshot() {
+    SageMotionTheme {
+        PostTaskSurveyScreen(
+            performance = TaskPerformance(
+                taskInstance = 3,
+                scenario = ExperimentScenario.VISUAL,
+                completionTimeMs = 5_240,
+                decisionTimeMs = 2_180,
+                misoperationCount = 0,
+                attemptCount = 1,
+            ),
+            onSubmit = {},
+        )
+    }
+}
 
 @Preview(name = "SAGE Full Route Result", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
@@ -197,7 +218,43 @@ fun JourneyRouteStoryScreenshot() {
                 aiStage = AiStage.COMPLETE,
                 resultVisible = true,
                 journeyPhotoMoments = sampleJourneyMoments(),
+                voiceTranscript = "这附近有什么适合拍照的地方？",
+                voiceInteractionCount = 3,
+                voiceTranscripts = listOf("附近哪里适合拍照？", "湖边有洗手间吗？", "下一处座椅在哪里？"),
+                replanCount = 1,
+                routeReplanned = true,
                 taskResult = AiTaskResult("知识游记已生成", "路线、照片与沿途问题已经串联完成。", "部分识别结论需要结合现场标牌核查", "完成本次体验", listOf("路线记录", "照片问答")),
+            ),
+            onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
+            onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
+            onRouteSelected = {}, onScenarioSelected = {}, onConditionSelected = {}, onNextCondition = {},
+            onPreviewPrevious = {}, onPreviewNext = {}, onResearcherPanel = {}, onHistory = {},
+            onExport = {}, onExportAll = {}, onVoiceTranscript = {},
+            onCreatePhotoUri = { android.net.Uri.EMPTY }, onPhotoCaptured = {}, onShareJourney = {}, onBeginJourneySummary = {},
+        )
+    }
+}
+
+@Preview(name = "Journey Proposed Replan", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+fun JourneyProposedReplanScreenshot() {
+    SageMotionTheme {
+        ExperimentScreen(
+            state = ExperimentUiState(
+                sessionStarted = true,
+                participantId = "P001",
+                order = ConditionOrder.ABC,
+                conditionIndex = 2,
+                scenario = ExperimentScenario.CREATE,
+                aiStage = AiStage.COMPLETE,
+                resultVisible = true,
+                journeyPhotoMoments = sampleJourneyMoments(),
+                voiceTranscript = "附近哪里有好吃的？",
+                voiceInteractionCount = 1,
+                voiceTranscripts = listOf("附近哪里有好吃的？"),
+                replanCount = 1,
+                routeReplanned = false,
+                taskResult = AiTaskResult("知识游记已生成", "路线、照片与沿途问题已经串联完成。", "橙色虚线表示比较过但未采用的改道建议", "完成本次体验", listOf("路线记录", "照片问答")),
             ),
             onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
             onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
@@ -222,6 +279,7 @@ fun SageDynamicReplanningScreenshot() {
                 scenario = ExperimentScenario.ADJUST,
                 aiStage = AiStage.REPLANNING,
                 isRunning = true,
+                replanRequestText = "前方临时封路，而且快下雨了，帮我调整路线",
             ),
             onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
             onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
@@ -245,10 +303,39 @@ fun ParallelExplorationHubScreenshot() {
                 conditionIndex = 2,
                 scenario = ExperimentScenario.EXPLORE,
                 aiStage = AiStage.COMPLETE,
+                adoptedRoute = RouteChoice.ALTERNATIVE,
                 completedTaskCount = 5,
                 visualInteractionCount = 2,
                 voiceInteractionCount = 2,
                 replanCount = 1,
+                routeReplanned = true,
+            ),
+            onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
+            onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
+            onRouteSelected = {}, onScenarioSelected = {}, onConditionSelected = {}, onNextCondition = {},
+            onPreviewPrevious = {}, onPreviewNext = {}, onResearcherPanel = {}, onHistory = {},
+            onExport = {}, onExportAll = {}, onVoiceTranscript = {},
+            onCreatePhotoUri = { android.net.Uri.EMPTY }, onPhotoCaptured = {}, onShareJourney = {}, onBeginJourneySummary = {},
+        )
+    }
+}
+
+@Preview(name = "Alternative Route Exploration Hub", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+fun AlternativeRouteExplorationHubScreenshot() {
+    SageMotionTheme {
+        ExperimentScreen(
+            state = ExperimentUiState(
+                sessionStarted = true,
+                participantId = "P001",
+                order = ConditionOrder.ABC,
+                conditionIndex = 2,
+                scenario = ExperimentScenario.EXPLORE,
+                aiStage = AiStage.COMPLETE,
+                adoptedRoute = RouteChoice.ALTERNATIVE,
+                completedTaskCount = 2,
+                visualInteractionCount = 1,
+                voiceInteractionCount = 1,
             ),
             onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
             onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
@@ -312,6 +399,79 @@ fun CircleSearchAnswerScreenshot() {
     }
 }
 
+@Preview(name = "Circle Search Voice Question", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+fun CircleSearchVoiceQuestionScreenshot() {
+    SageMotionTheme {
+        ExperimentScreen(
+            state = ExperimentUiState(
+                sessionStarted = true,
+                participantId = "P001",
+                order = ConditionOrder.ABC,
+                conditionIndex = 2,
+                scenario = ExperimentScenario.VISUAL,
+                aiStage = AiStage.COMPLETE,
+                resultVisible = true,
+                visionFindings = listOf(VisionFinding("粉红色花卉", .88f), VisionFinding("叶片", .81f)),
+                taskResult = AiTaskResult("多点识别完成", "已形成画面语义候选。", "图像识别仍可能有偏差", "保存", listOf("端侧图像标签")),
+            ),
+            onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
+            onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
+            onRouteSelected = {}, onScenarioSelected = {}, onConditionSelected = {}, onNextCondition = {},
+            onPreviewPrevious = {}, onPreviewNext = {}, onResearcherPanel = {}, onHistory = {},
+            onExport = {}, onExportAll = {}, onVoiceTranscript = {},
+            onCreatePhotoUri = { android.net.Uri.EMPTY }, onPhotoCaptured = {}, onShareJourney = {}, onBeginJourneySummary = {},
+        )
+    }
+}
+
+@Preview(name = "Voice Manual Input", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+fun VoiceManualInputScreenshot() {
+    SageMotionTheme {
+        ExperimentScreen(
+            state = ExperimentUiState(
+                sessionStarted = true,
+                participantId = "P001",
+                order = ConditionOrder.ABC,
+                conditionIndex = 2,
+                scenario = ExperimentScenario.VOICE,
+                aiStage = AiStage.IDLE,
+                voiceTranscript = "附近哪里有好吃的？",
+            ),
+            onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
+            onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
+            onRouteSelected = {}, onScenarioSelected = {}, onConditionSelected = {}, onNextCondition = {},
+            onPreviewPrevious = {}, onPreviewNext = {}, onResearcherPanel = {}, onHistory = {},
+            onExport = {}, onExportAll = {}, onVoiceTranscript = {},
+            onCreatePhotoUri = { android.net.Uri.EMPTY }, onPhotoCaptured = {}, onShareJourney = {}, onBeginJourneySummary = {},
+        )
+    }
+}
+
+@Preview(name = "Replan Request Input", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+fun ReplanRequestInputScreenshot() {
+    SageMotionTheme {
+        ExperimentScreen(
+            state = ExperimentUiState(
+                sessionStarted = true,
+                participantId = "P001",
+                order = ConditionOrder.ABC,
+                conditionIndex = 2,
+                scenario = ExperimentScenario.ADJUST,
+                aiStage = AiStage.IDLE,
+            ),
+            onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
+            onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
+            onRouteSelected = {}, onScenarioSelected = {}, onConditionSelected = {}, onNextCondition = {},
+            onPreviewPrevious = {}, onPreviewNext = {}, onResearcherPanel = {}, onHistory = {},
+            onExport = {}, onExportAll = {}, onVoiceTranscript = {}, onReplanRequestChanged = {},
+            onCreatePhotoUri = { android.net.Uri.EMPTY }, onPhotoCaptured = {}, onShareJourney = {}, onBeginJourneySummary = {},
+        )
+    }
+}
+
 @Preview(name = "History List", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
 fun HistoryListScreenshot() {
@@ -326,6 +486,7 @@ fun HistoryListScreenshot() {
             onSelect = {},
             onCloseDetail = {},
             onExportSession = {},
+            onShareJourney = {},
             onExportAll = {},
             onDeleteSession = {},
             onDeleteAll = {},
