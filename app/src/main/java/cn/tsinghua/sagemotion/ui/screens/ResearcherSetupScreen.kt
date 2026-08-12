@@ -44,15 +44,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.tsinghua.sagemotion.model.ConditionOrder
 import cn.tsinghua.sagemotion.model.DemoMode
+import cn.tsinghua.sagemotion.model.LandmarkStyle
+import cn.tsinghua.sagemotion.model.ParkRoute
 import cn.tsinghua.sagemotion.ui.theme.SageGreen
 import cn.tsinghua.sagemotion.ui.theme.SageInk
 import cn.tsinghua.sagemotion.ui.theme.SageMist
+import cn.tsinghua.sagemotion.ui.theme.SageMuted
 import cn.tsinghua.sagemotion.ui.theme.SageSurface
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ResearcherSetupScreen(
-    onStart: (String, ConditionOrder, DemoMode) -> Unit,
+    onStart: (String, ConditionOrder, DemoMode, LandmarkStyle) -> Unit,
     onHistory: () -> Unit,
     savedSessionCount: Int,
     statusMessage: String?,
@@ -60,6 +63,7 @@ fun ResearcherSetupScreen(
     var participantId by rememberSaveable { mutableStateOf("") }
     var selectedOrder by rememberSaveable { mutableStateOf(ConditionOrder.ABC) }
     var selectedMode by rememberSaveable { mutableStateOf(DemoMode.EXPERIMENT_OFFLINE) }
+    var selectedLandmark by rememberSaveable { mutableStateOf(LandmarkStyle.DEPTH) }
 
     Box(
         modifier = Modifier
@@ -126,7 +130,7 @@ fun ResearcherSetupScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        ConditionOrder.entries.forEach { order ->
+                        ConditionOrder.entries.filterNot { it.isPairedComparison }.forEach { order ->
                             FilterChip(
                                 selected = selectedOrder == order,
                                 onClick = { selectedOrder = order },
@@ -140,6 +144,64 @@ fun ResearcherSetupScreen(
                         color = Color(0xFF7A837F),
                         modifier = Modifier.padding(top = 10.dp),
                     )
+
+                    // 两条件对照。评审意见：正式实验可能只跑「对照基线 VS 我们的设计」，
+                    // 招募时已排好顺序，这里由主试核对。三条件顺序仍然保留。
+                    Spacer(Modifier.height(14.dp))
+                    Text("或：同应用两条件对照", fontWeight = FontWeight.Medium, color = SageInk)
+                    FlowRow(
+                        modifier = Modifier.padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ConditionOrder.entries.filter { it.isPairedComparison }.forEach { order ->
+                            FilterChip(
+                                selected = selectedOrder == order,
+                                onClick = { selectedOrder = order },
+                                label = { Text(order.label) },
+                            )
+                        }
+                    }
+                    Text(
+                        text = "两条件用于比较同一 APP 的通用反馈与 SAGE 完整动效，功能、内容和任务保持一致；不是与某个品牌手机直接做产品对比。",
+                        fontSize = 11.sp,
+                        lineHeight = 17.sp,
+                        color = SageMuted,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        text = "当前设置：${selectedOrder.conditions.size} 个条件 · ${selectedOrder.conditions.joinToString(" → ") { it.id }}",
+                        fontSize = 12.sp,
+                        color = SageGreen,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+                    Text("沿途地标形态", fontWeight = FontWeight.Medium, color = SageInk)
+                    Text(
+                        "参考圆周旅迹把路途地点标注出来；访谈中有人建议用立体形态与之区分。",
+                        fontSize = 11.sp,
+                        color = SageMuted,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(top = 8.dp),
+                    ) {
+                        LandmarkStyle.entries.forEach { style ->
+                            FilterChip(
+                                selected = selectedLandmark == style,
+                                onClick = { selectedLandmark = style },
+                                label = {
+                                    Column(Modifier.padding(vertical = 3.dp)) {
+                                        Text(style.label, fontWeight = FontWeight.Medium)
+                                        Text(style.description, fontSize = 11.sp, color = SageMuted)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(20.dp))
                     Text("运行模式", fontWeight = FontWeight.Medium, color = SageInk)
                     Column(
@@ -162,7 +224,8 @@ fun ResearcherSetupScreen(
                     }
                     if (selectedMode == DemoMode.ONLINE_AGENT) {
                         Text(
-                            "使用清华校园固定演示点，不读取参与者定位；接口失败自动回退。联网结果不得混入正式实验数据分析。",
+                            "起点为 ${ParkRoute.START_POINT}，接入实时环境与附近地点工具；接口失败自动回退到离线脚本。" +
+                                "联网与离线两种模式在日志中区分，分析时请分别标注。",
                             fontSize = 11.sp,
                             color = Color(0xFF805024),
                             modifier = Modifier.padding(top = 8.dp),
@@ -172,7 +235,7 @@ fun ResearcherSetupScreen(
             }
 
             Button(
-                onClick = { onStart(participantId, selectedOrder, selectedMode) },
+                onClick = { onStart(participantId, selectedOrder, selectedMode, selectedLandmark) },
                 enabled = participantId.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()

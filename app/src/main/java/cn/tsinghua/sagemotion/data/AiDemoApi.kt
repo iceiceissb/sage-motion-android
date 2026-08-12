@@ -89,19 +89,7 @@ class MockAiDemoApi(
             isLiveData = request.visionFindings.isNotEmpty(),
         )
 
-        ExperimentScenario.VOICE -> AiTaskResult(
-            title = "推荐：湖心桥东侧",
-            summary = "向前约 180 米，桥边能拍到湖面、柳树和远处亭子。下午光线更柔和。",
-            uncertainty = "现场拥挤度为估计值，可能有延迟",
-            primaryAction = "完成体验",
-            evidence = listOf(
-                "语音转写：${request.prompt}",
-                "距离：当前位置约 180 米",
-                "景观：湖面、柳树、亭子同框",
-                "光线：下午侧逆光",
-                "缺口：人流数据约有 10 分钟延迟",
-            ),
-        )
+        ExperimentScenario.VOICE -> voiceResultFor(request.prompt)
 
         ExperimentScenario.CREATE -> AiTaskResult(
             title = "已生成：一条会呼吸的公园记忆",
@@ -138,6 +126,65 @@ class MockAiDemoApi(
                 "新路线：增加 260 米，经过 2 处连廊",
                 "接管：可保留原路线或采用新路线",
             ),
+        )
+    }
+
+    /**
+     * 免费、离线且确定性的基础问答。正式条件比较不接入随机大模型，避免回答质量成为混淆变量；
+     * 生态演示中的语音转写使用 APK 内置的 Vosk 中文离线模型。
+     */
+    private fun voiceResultFor(rawPrompt: String): AiTaskResult {
+        val prompt = rawPrompt.trim()
+        val compactPrompt = prompt.replace(Regex("\\s+"), "")
+        val response = when {
+            listOf("吃", "餐厅", "餐馆", "饭店", "美食", "咖啡", "茶饮", "小吃").any(compactPrompt::contains) -> Triple(
+                "附近餐饮：建议查询南门外",
+                "我识别到这是附近餐饮需求。离线模式没有实时商户与营业信息，可先从公园南门出园后查看周边餐饮；切换到联网 Agent 后会调用 OpenStreetMap 附近地点工具返回名称和距离。",
+                listOf("意图：附近餐饮", "离线边界：不虚构商户名称", "联网工具：OpenStreetMap Nearby"),
+            )
+            listOf("拍照", "拍照的地方", "好看", "景色", "打卡").any(compactPrompt::contains) -> Triple(
+                "推荐：湖心桥东侧",
+                "向前约 180 米到湖心桥东侧，那里能把湖面、柳树和远处亭子一起拍进画面；下午侧光会更柔和。",
+                listOf("距离：当前位置约 180 米", "景观：湖面、柳树、亭子同框", "建议：保留三分之一环境作为地点线索"),
+            )
+            listOf("花", "植物", "月季", "蔷薇").any(compactPrompt::contains) -> Triple(
+                "附近花境：林荫步道南段",
+                "沿林荫步道向南约 120 米有一片宿根花境，常见月季、蔷薇和季节性草花。花木身份请以现场标牌为准。",
+                listOf("位置：林荫步道南段", "距离：约 120 米", "边界：语音回答不能替代植物专业鉴定"),
+            )
+            listOf("厕所", "洗手间", "卫生间").any(compactPrompt::contains) -> Triple(
+                "洗手间：南门服务中心",
+                "最近的公共洗手间在南门管理服务中心附近，沿当前路线返回约 6 分钟。现场指示牌的信息最可靠。",
+                listOf("设施：南门管理服务中心", "步行：约 6 分钟", "提醒：开放状态以现场指示为准"),
+            )
+            listOf("休息", "座椅", "累", "坐").any(compactPrompt::contains) -> Triple(
+                "休息点：林荫休息廊",
+                "继续向前约 90 米就是林荫休息廊，沿途有连续树荫和多处座椅，适合短暂停留。",
+                listOf("距离：约 90 米", "设施：座椅与连续树荫", "路线：仍在湖边林荫线上"),
+            )
+            listOf("下雨", "雨", "避雨", "天气").any(compactPrompt::contains) -> Triple(
+                "避雨建议：转向连廊",
+                "如果开始下雨，可以在下一个岔路转向综合运动区连廊；预计多走 4 分钟，但遮蔽更连续。",
+                listOf("备选：综合运动区连廊", "代价：约增加 4 分钟", "提醒：雷雨天气应尽快离开开阔水边"),
+            )
+            listOf("出口", "怎么走", "回去", "南门").any(compactPrompt::contains) -> Triple(
+                "返回南门",
+                "沿湖边林荫线继续前行，在儿童活动区外环右转可返回南门，全程约 12 分钟。",
+                listOf("终点：南园南门", "预计：约 12 分钟", "途经：儿童活动区外环"),
+            )
+            else -> Triple(
+                "我理解了你的问题",
+                "你问的是“$prompt”。这个问题没有命中可核实的本地设施或环境工具，我不会编造现场事实；可以继续补充地点、想找的设施或路线需求，我会重新判断应该调用天气、路线还是附近地点工具。",
+                listOf("语音转写：$prompt", "Agent 策略：先识别意图，再选择天气、路线或地点工具", "边界：没有可靠工具结果时不编造现场事实"),
+            )
+        }
+        return AiTaskResult(
+            title = response.first,
+            summary = response.second,
+            uncertainty = "位置与现场状态来自固定演示数据，出行时请以标牌和实际环境为准",
+            primaryAction = "完成体验",
+            evidence = listOf("语音转写：$prompt") + response.third,
+            sourceLabel = "Vosk 离线语音 · 本地 Agent 路由",
         )
     }
 }

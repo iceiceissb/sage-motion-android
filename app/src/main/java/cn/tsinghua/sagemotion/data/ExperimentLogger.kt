@@ -7,8 +7,10 @@ import cn.tsinghua.sagemotion.model.AiStage
 import cn.tsinghua.sagemotion.model.ExperimentCondition
 import cn.tsinghua.sagemotion.model.ExperimentScenario
 import cn.tsinghua.sagemotion.model.HistoryEvent
+import cn.tsinghua.sagemotion.model.PostTaskMeasurement
 import cn.tsinghua.sagemotion.model.SessionDetail
 import cn.tsinghua.sagemotion.model.SessionSummary
+import cn.tsinghua.sagemotion.model.SurveyDimension
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -29,7 +31,10 @@ class ExperimentLogger(private val context: Context) {
         val safeParticipant = participantId.replace(Regex("[^A-Za-z0-9_-]"), "_")
         logFile = File(logDirectory, "sage_${safeParticipant}_$timestamp.csv")
         sessionStartElapsed = SystemClock.elapsedRealtime()
-        logFile!!.writeText(CSV_HEADER + "\n", Charsets.UTF_8)
+        logFile!!.outputStream().use { output ->
+            output.write(UTF8_BOM)
+            output.write((CSV_HEADER + "\n").toByteArray(Charsets.UTF_8))
+        }
         return logFile!!
     }
 
@@ -54,6 +59,7 @@ class ExperimentLogger(private val context: Context) {
         confidence: String = confidenceFor(stage),
         resultAdopted: String = "",
         details: String = "",
+        measurement: PostTaskMeasurement? = null,
     ) {
         val file = logFile ?: startSession(participantId)
         val wallClock = System.currentTimeMillis()
@@ -72,11 +78,25 @@ class ExperimentLogger(private val context: Context) {
             confidence,
             resultAdopted,
             details,
+            measurement?.performance?.taskInstance?.toString().orEmpty(),
+            measurement?.performance?.completionTimeMs?.toString().orEmpty(),
+            measurement?.performance?.decisionTimeMs?.toString().orEmpty(),
+            measurement?.performance?.misoperationCount?.toString().orEmpty(),
+            measurement?.performance?.attemptCount?.toString().orEmpty(),
+            measurement?.ratings?.get(SurveyDimension.STATE_RECOGNITION)?.toString().orEmpty(),
+            measurement?.ratings?.get(SurveyDimension.PROCESS_UNDERSTANDING)?.toString().orEmpty(),
+            measurement?.ratings?.get(SurveyDimension.CALIBRATED_TRUST)?.toString().orEmpty(),
+            measurement?.ratings?.get(SurveyDimension.PERCEIVED_CONTROL)?.toString().orEmpty(),
+            measurement?.ratings?.get(SurveyDimension.WORKLOAD)?.toString().orEmpty(),
         )
         file.appendText(CsvCodec.encodeRow(values) + "\n", Charsets.UTF_8)
     }
 
     fun latestLogFile(): File? = logFile?.takeIf { it.isFile }
+
+    fun createCurrentCsvExport(): File? = latestLogFile()?.let(::createTaskMeasurementCsv)
+
+    fun createSessionCsvExport(fileName: String): File? = fileByName(fileName)?.let(::createTaskMeasurementCsv)
 
     fun activeLogFileName(): String? = latestLogFile()?.name
 
@@ -84,6 +104,17 @@ class ExperimentLogger(private val context: Context) {
         logFile = null
         sessionStartElapsed = 0L
     }
+
+    /** 把临时生成的游记固化到会话目录，确保结束会话后仍可预览和分享。 */
+    fun storeJourneyImage(source: File): File? = runCatching {
+        val session = latestLogFile() ?: return@runCatching null
+        logDirectory.mkdirs()
+        val target = journeyImageFor(session)
+        source.copyTo(target, overwrite = true)
+    }.getOrNull()
+
+    fun sessionJourneyImage(fileName: String): File? =
+        fileByName(fileName)?.let(::journeyImageFor)?.takeIf { it.isFile }
 
     fun fileByName(fileName: String): File? {
         val candidate = File(logDirectory, File(fileName).name)
@@ -131,7 +162,11 @@ class ExperimentLogger(private val context: Context) {
                 details = values[12],
             )
         }
-        return SessionDetail(summary = summary, events = events)
+        return SessionDetail(
+            summary = summary,
+            events = events,
+            journeyImagePath = sessionJourneyImage(file.name)?.absolutePath,
+        )
     }
 
     fun createAllSessionsArchive(): File? {
@@ -141,13 +176,79 @@ class ExperimentLogger(private val context: Context) {
         val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
         val archive = File(exportDirectory, "sage_all_sessions_$timestamp.zip")
         ZipOutputStream(FileOutputStream(archive)).use { zip ->
+            writeDataDictionary(zip)
             files.forEach { file ->
-                zip.putNextEntry(ZipEntry(file.name))
-                file.inputStream().use { input -> input.copyTo(zip) }
-                zip.closeEntry()
+                writeCsvEntry(zip, file.name, file.readBytes())
+                writeTaskMeasurementSummary(zip, file)
+                writeJourneyImage(zip, file)
             }
         }
         return archive
+    }
+
+    fun createCurrentSessionArchive(): File? {
+        val file = latestLogFile() ?: return null
+        exportDirectory.mkdirs()
+        val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        val archive = File(exportDirectory, "${file.nameWithoutExtension}_$timestamp.zip")
+        ZipOutputStream(FileOutputStream(archive)).use { zip ->
+            writeDataDictionary(zip)
+            writeCsvEntry(zip, file.name, file.readBytes())
+            writeTaskMeasurementSummary(zip, file)
+            writeJourneyImage(zip, file)
+        }
+        return archive
+    }
+
+    private fun writeDataDictionary(zip: ZipOutputStream) {
+        zip.putNextEntry(ZipEntry("DATA_DICTIONARY.txt"))
+        zip.write(UTF8_BOM)
+        zip.write(DATA_DICTIONARY.toByteArray(Charsets.UTF_8))
+        zip.closeEntry()
+    }
+
+    private fun createTaskMeasurementCsv(source: File): File {
+        exportDirectory.mkdirs()
+        val target = File(exportDirectory, source.nameWithoutExtension + "_task_measurements.csv")
+        target.outputStream().use { output ->
+            output.write(UTF8_BOM)
+            output.write(taskMeasurementSummary(source))
+        }
+        return target
+    }
+
+    private fun writeCsvEntry(zip: ZipOutputStream, name: String, bytes: ByteArray) {
+        zip.putNextEntry(ZipEntry(name))
+        zip.write(UTF8_BOM)
+        zip.write(if (bytes.startsWithBom()) bytes.copyOfRange(UTF8_BOM.size, bytes.size) else bytes)
+        zip.closeEntry()
+    }
+
+    /** 一行一个任务，便于直接做统计；原始事件流仍保留用于时序和误操作审计。 */
+    private fun writeTaskMeasurementSummary(zip: ZipOutputStream, file: File) {
+        writeCsvEntry(zip, "${file.nameWithoutExtension}_task_measurements.csv", taskMeasurementSummary(file))
+    }
+
+    private fun writeJourneyImage(zip: ZipOutputStream, file: File) {
+        val image = journeyImageFor(file).takeIf { it.isFile } ?: return
+        zip.putNextEntry(ZipEntry(image.name))
+        image.inputStream().use { it.copyTo(zip) }
+        zip.closeEntry()
+    }
+
+    private fun taskMeasurementSummary(file: File): ByteArray {
+        val rows = readRows(file).filter { it.size >= 23 && it[8] == "post_task_measurement" }
+        val summaryHeader = listOf(
+            "participant_id", "condition_id", "condition_order", "task_id", "task_phase", "task_instance",
+            "completion_time_ms", "decision_time_ms", "misoperation_count", "attempt_count",
+            "state_recognition", "process_understanding", "calibrated_trust", "perceived_control", "workload",
+        )
+        return buildString {
+            append(CsvCodec.encodeRow(summaryHeader)).append('\n')
+            rows.forEach { row ->
+                append(CsvCodec.encodeRow(listOf(row[2], row[3], row[4], row[5], row[6]) + row.subList(13, 23))).append('\n')
+            }
+        }.toByteArray(Charsets.UTF_8)
     }
 
     private fun listLogFiles(): List<File> {
@@ -196,6 +297,7 @@ class ExperimentLogger(private val context: Context) {
     }.getOrDefault(emptyList())
 
     private fun deletePhotoArtifacts(file: File) {
+        journeyImageFor(file).delete()
         readRows(file)
             .filter { it.size >= COLUMN_COUNT && it[8] == "photo_captured" }
             .mapNotNull { row -> row[12].substringAfter("uri=", "").takeIf { it.isNotBlank() } }
@@ -203,10 +305,33 @@ class ExperimentLogger(private val context: Context) {
             .forEach { name -> File(context.cacheDir, "camera_captures/${File(name).name}").delete() }
     }
 
+    private fun journeyImageFor(file: File): File =
+        File(logDirectory, "${file.nameWithoutExtension}_journey.png")
+
     private companion object {
-        const val COLUMN_COUNT = 13
+        const val COLUMN_COUNT = 13 // Old files remain readable; new measurement columns are appended.
+        val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
         const val CSV_HEADER =
-            "wall_clock_ms,elapsed_ms,participant_id,condition_id,condition_order,task_id,task_phase,ai_state,event,user_action,confidence,result_adopted,details"
+            "wall_clock_ms,elapsed_ms,participant_id,condition_id,condition_order,task_id,task_phase,ai_state,event,user_action,confidence,result_adopted,details,task_instance,completion_time_ms,decision_time_ms,misoperation_count,attempt_count,state_recognition,process_understanding,calibrated_trust,perceived_control,workload"
+
+        val DATA_DICTIONARY = """
+            SAGE Motion 预实验数据字典（UTF-8）
+
+            每次任务完成后会写入一行 event=post_task_measurement：
+            - task_instance：当前会话内已完成任务的顺序号
+            - completion_time_ms：点击启动任务至结果首次呈现的时间
+            - decision_time_ms：结果首次呈现至用户采纳或确认的时间
+            - misoperation_count：取消、重置、拍照失败及研究员人工补记的总数
+            - attempt_count：该任务实例的启动尝试次数
+            - state_recognition / process_understanding / calibrated_trust /
+              perceived_control / workload：1–7 点量表；工作负荷越高表示负荷越高
+
+            三个实验条件使用相同题目顺序、量尺和提交流程。
+            ZIP 中原始会话 CSV 是完整事件流；*_task_measurements.csv 是一行一个任务的分析表。
+            推荐主分析使用任务汇总表，状态进入/退出事件用于操作核查与过程分析。
+        """.trimIndent()
+
+        fun ByteArray.startsWithBom(): Boolean = size >= 3 && this[0] == UTF8_BOM[0] && this[1] == UTF8_BOM[1] && this[2] == UTF8_BOM[2]
 
         fun confidenceFor(stage: AiStage): String = when (stage) {
             AiStage.UNCERTAIN -> "low"

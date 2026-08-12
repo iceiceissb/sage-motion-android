@@ -12,8 +12,10 @@ import cn.tsinghua.sagemotion.data.AiTaskEvent
 import cn.tsinghua.sagemotion.data.AiTaskRequest
 import cn.tsinghua.sagemotion.data.ExperimentLogger
 import cn.tsinghua.sagemotion.data.ExperimentSessionStore
+import cn.tsinghua.sagemotion.data.JourneyShareRenderer
 import cn.tsinghua.sagemotion.data.MockAiDemoApi
 import cn.tsinghua.sagemotion.data.agent.OpenMeteoParkContextProvider
+import cn.tsinghua.sagemotion.data.agent.OpenStreetMapPlaceProvider
 import cn.tsinghua.sagemotion.data.agent.ParkAgentApi
 import cn.tsinghua.sagemotion.data.vision.OnDeviceVisionAnalyzer
 import cn.tsinghua.sagemotion.model.AiStage
@@ -23,7 +25,11 @@ import cn.tsinghua.sagemotion.model.ExperimentScenario
 import cn.tsinghua.sagemotion.model.ExperimentUiState
 import cn.tsinghua.sagemotion.model.JourneyPhotoMoment
 import cn.tsinghua.sagemotion.model.JourneyQuestion
+import cn.tsinghua.sagemotion.model.LandmarkStyle
+import cn.tsinghua.sagemotion.model.PostTaskMeasurement
 import cn.tsinghua.sagemotion.model.RouteChoice
+import cn.tsinghua.sagemotion.model.SurveyDimension
+import cn.tsinghua.sagemotion.model.TaskPerformance
 import cn.tsinghua.sagemotion.model.stageSequenceFor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -37,8 +43,10 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     private val onlineAgentApi: AiDemoApi = ParkAgentApi(
         scriptedApi = offlineApi,
         contextProvider = OpenMeteoParkContextProvider(application),
+        placeProvider = OpenStreetMapPlaceProvider(),
     )
     private val visionAnalyzer = OnDeviceVisionAnalyzer(application)
+    private val journeyShareRenderer = JourneyShareRenderer(application)
     private var pendingCaptureUri: Uri? = null
     private var runJob: Job? = null
 
@@ -49,7 +57,12 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         restoreActiveSession()
     }
 
-    fun startSession(participantId: String, order: ConditionOrder, demoMode: DemoMode) {
+    fun startSession(
+        participantId: String,
+        order: ConditionOrder,
+        demoMode: DemoMode,
+        landmarkStyle: LandmarkStyle = LandmarkStyle.DEPTH,
+    ) {
         val normalizedId = participantId.trim().ifBlank { "P000" }
         logger.startSession(normalizedId)
         uiState.value = ExperimentUiState(
@@ -57,18 +70,41 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             participantId = normalizedId,
             order = order,
             demoMode = demoMode,
+            landmarkStyle = landmarkStyle,
+            welcomeShown = false,
             statusMessage = "实验会话已开始 · 数据实时保存在本机",
         )
         logEvent(
             "session_started",
-            details = "order=${order.name};mode=${demoMode.name};device=${Build.MANUFACTURER} ${Build.MODEL};android=${Build.VERSION.SDK_INT};app=${BuildConfig.VERSION_NAME}",
+            details = "order=${order.name};conditions=${order.conditions.size};mode=${demoMode.name};landmark=${landmarkStyle.name};device=${Build.MANUFACTURER} ${Build.MODEL};android=${Build.VERSION.SDK_INT};app=${BuildConfig.VERSION_NAME}",
         )
+        persistState()
+    }
+
+    /**
+     * 结束开屏欢迎动画，进入 A 任务。
+     *
+     * 单独记一条事件，这样分析时可以把欢迎页停留时长从第一个任务的反应时里剔除。
+     */
+    fun completeWelcome() {
+        if (uiState.value.welcomeShown) return
+        uiState.value = uiState.value.copy(welcomeShown = true)
+        logEvent("welcome_completed")
+        persistState()
+    }
+
+    /** 切换沿途地标的呈现形态（数字 / 图标 / 立体）。 */
+    fun setLandmarkStyle(style: LandmarkStyle) {
+        if (uiState.value.landmarkStyle == style) return
+        uiState.value = uiState.value.copy(landmarkStyle = style)
+        logEvent("landmark_style_changed", action = style.name)
         persistState()
     }
 
     fun finishSession() {
         if (!uiState.value.sessionStarted) return
         stopRun()
+        persistJourneyImageIfAvailable()
         logEvent("session_completed", details = "completed_tasks=${uiState.value.completedTaskCount}")
         sessionStore.clear()
         logger.releaseActiveSession()
@@ -79,8 +115,9 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun runCurrentScenario() {
-        if (uiState.value.isRunning || uiState.value.demoCompleted || uiState.value.scenario == ExperimentScenario.EXPLORE) return
+        if (uiState.value.isRunning || uiState.value.demoCompleted || uiState.value.pendingPostTaskSurvey != null || uiState.value.scenario == ExperimentScenario.EXPLORE) return
         runJob?.cancel()
+        val now = System.currentTimeMillis()
         uiState.value = uiState.value.copy(
             isRunning = true,
             resultVisible = false,
@@ -88,8 +125,11 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             selectedRoute = RouteChoice.RECOMMENDED,
             statusMessage = null,
             taskResult = null,
+            taskStartedAtMillis = uiState.value.taskStartedAtMillis.takeIf { it > 0L } ?: now,
+            resultPresentedAtMillis = 0L,
+            taskAttemptCount = uiState.value.taskAttemptCount + 1,
         )
-        logEvent("task_started")
+        logEvent("task_started", details = "attempt=${uiState.value.taskAttemptCount};task_instance=${uiState.value.completedTaskCount + 1}")
         persistState()
 
         val routePreferences = routePreferenceLabels(uiState.value.routePreferenceIds)
@@ -102,10 +142,12 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
                     append(routePreferences.ifBlank { "舒适易行" })
                     uiState.value.routeConstraintText.takeIf { it.isNotBlank() }?.let { append("；补充约束：$it") }
                 }
+                ExperimentScenario.ADJUST -> uiState.value.replanRequestText.ifBlank { uiState.value.scenario.participantPrompt }
                 else -> uiState.value.scenario.participantPrompt
             },
             visionFindings = if (uiState.value.scenario == ExperimentScenario.VISUAL) uiState.value.visionFindings else emptyList(),
         )
+        logEvent("task_input_submitted", action = "submit", details = "prompt=${request.prompt.replace(';', '；').replace('\n', ' ').take(180)}")
         runJob = viewModelScope.launch {
             try {
                 val api = when (uiState.value.demoMode) {
@@ -116,15 +158,26 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
                     when (event) {
                         is AiTaskEvent.StageChanged -> enterStage(event.stage)
                         is AiTaskEvent.Completed -> {
+                            val resultPresentedAt = System.currentTimeMillis()
+                            val completedScenario = uiState.value.scenario
+                            val completedVoice = uiState.value.voiceTranscript.trim()
                             uiState.value = uiState.value.copy(
                                 isRunning = false,
                                 resultVisible = true,
                                 taskResult = event.result,
-                                completedTaskCount = uiState.value.completedTaskCount + 1,
+                                resultPresentedAtMillis = resultPresentedAt,
+                                voiceInteractionCount = uiState.value.voiceInteractionCount + if (completedScenario == ExperimentScenario.VOICE) 1 else 0,
+                                voiceTranscripts = if (completedScenario == ExperimentScenario.VOICE && completedVoice.isNotBlank()) {
+                                    (uiState.value.voiceTranscripts + completedVoice).takeLast(12)
+                                } else {
+                                    uiState.value.voiceTranscripts
+                                },
+                                visualInteractionCount = uiState.value.visualInteractionCount + if (completedScenario == ExperimentScenario.VISUAL) 1 else 0,
+                                replanCount = uiState.value.replanCount + if (completedScenario == ExperimentScenario.ADJUST) 1 else 0,
                             )
                             logEvent(
                                 "task_result_visible",
-                                details = "source=${event.result.sourceLabel};live=${event.result.isLiveData}",
+                                details = "source=${event.result.sourceLabel};live=${event.result.isLiveData};completion_time_ms=${(resultPresentedAt - uiState.value.taskStartedAtMillis).coerceAtLeast(0L)}",
                             )
                             persistState()
                         }
@@ -147,7 +200,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
 
     fun setScenario(scenario: ExperimentScenario) {
         stopRun()
-        uiState.value = uiState.value.copy(
+        var next = uiState.value.copy(
             scenario = scenario,
             aiStage = AiStage.IDLE,
             isRunning = false,
@@ -157,7 +210,25 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             selectedRoute = RouteChoice.RECOMMENDED,
             taskResult = null,
             demoCompleted = false,
+            taskStartedAtMillis = 0L,
+            resultPresentedAtMillis = 0L,
+            taskMisoperationCount = 0,
+            taskAttemptCount = 0,
+            pendingPostTaskSurvey = null,
         )
+        next = when (scenario) {
+            ExperimentScenario.VISUAL -> next.copy(
+                capturedPhotoUri = null,
+                visionFindings = emptyList(),
+                photoAnalysisStatus = null,
+                visualQuestion = "",
+                visualAnswer = null,
+            )
+            ExperimentScenario.VOICE -> next.copy(voiceTranscript = "")
+            ExperimentScenario.ADJUST -> next.copy(replanRequestText = "")
+            else -> next
+        }
+        uiState.value = next
         logEvent("scenario_selected", details = scenario.id)
         persistState()
     }
@@ -165,12 +236,16 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     fun setVoiceTranscript(transcript: String) {
         val normalized = transcript.trim().take(160)
         uiState.value = uiState.value.copy(voiceTranscript = normalized)
-        logEvent("voice_transcribed", details = normalized)
         persistState()
     }
 
     fun setRouteConstraint(text: String) {
         uiState.value = uiState.value.copy(routeConstraintText = text.take(160))
+        persistState()
+    }
+
+    fun setReplanRequest(text: String) {
+        uiState.value = uiState.value.copy(replanRequestText = text.take(160))
         persistState()
     }
 
@@ -186,15 +261,31 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         val normalized = question.trim().take(120)
         if (normalized.isBlank()) return
         val finding = uiState.value.visionFindings.maxByOrNull { it.confidence }
-        val subject = finding?.label ?: "圈选区域"
+        val usesFixedFlowerStimulus = uiState.value.capturedPhotoUri == null
+        val subject = visualSubject(finding?.label, usesFixedFlowerStimulus)
         val confidence = finding?.let { "（端侧识别置信度 ${(it.confidence * 100).toInt()}%）" }.orEmpty()
         val answer = when {
-            "特点" in normalized -> "$subject 的形态、材质与周围环境形成了当前可见特征。$confidence 建议结合圈选范围和现场距离继续观察。"
-            "为什么" in normalized || "原因" in normalized -> "从画面线索看，它与当前位置的光照、植被和使用场景有关。$confidence 这是基于图像的解释，现场标牌会是更可靠的补充依据。"
+            "是什么" in normalized || "什么花" in normalized -> if (usesFixedFlowerStimulus || subject.contains("花")) {
+                "画面中是一簇粉红色蔷薇科花卉，外观更接近月季或蔷薇。可以看到成簇花朵、五枚展开花瓣和有锯齿的复叶；仅凭这张照片还不能可靠确定具体品种。"
+            } else {
+                "圈选主体最可能是“$subject”。$confidence 这是端侧通用图像标签给出的类别线索，仍建议结合实物和现场标牌核查。"
+            }
+            "特点" in normalized -> if (usesFixedFlowerStimulus || subject.contains("花")) {
+                "这簇花呈粉红色，花朵成簇开放，花瓣较薄，叶片为绿色复叶且边缘有细锯齿。这些特征符合常见月季或蔷薇类植物，但不足以精确到品种。"
+            } else {
+                "$subject 的轮廓、表面和周围环境构成了当前可见特征。$confidence 建议结合圈选范围和现场距离继续观察。"
+            }
+            "为什么" in normalized || "原因" in normalized -> if (usesFixedFlowerStimulus || subject.contains("花")) {
+                "这类月季或蔷薇常被种在公园花境和步道旁：花期观赏性强，成簇生长容易形成连续景观，也能为昆虫提供花粉与花蜜。具体栽植原因仍以园区说明为准。"
+            } else {
+                "从画面线索看，它与当前位置的光照、植被和使用场景有关。$confidence 这是基于图像的解释，现场标牌会是更可靠的补充依据。"
+            }
             "拍" in normalized || "记录" in normalized -> "适合记录。可以保留圈选主体，并让周围环境占画面约三分之一，这样知识游记既有细节也有地点语境。"
-            else -> "圈选区域最可能与“$subject”有关。$confidence 我已把问题、识别线索和这张过程照片一起保留到本次旅程。"
+            else -> "你的问题指向画面中的“$subject”。$confidence 目前可以确认它的基础视觉类别，但更细的身份或成因仍需要现场信息补充。"
         }
-        val currentPhoto = uiState.value.capturedPhotoUri.orEmpty()
+        // 固定刺激也必须按任务实例建独立节点，不能把第二次使用继续追加到第一次答案上。
+        val currentPhoto = uiState.value.capturedPhotoUri
+            ?: "fixed://flower/${uiState.value.visualInteractionCount.coerceAtLeast(1)}"
         val currentMoments = uiState.value.journeyPhotoMoments
         val existingIndex = currentMoments.indexOfLast { it.photoUri == currentPhoto }
         val questionRecord = JourneyQuestion(normalized, answer)
@@ -237,7 +328,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         val uri = pendingCaptureUri
         if (!success || uri == null) {
             uiState.value = uiState.value.copy(photoAnalysisStatus = "未完成拍照，可继续使用固定实验图片")
-            logEvent("photo_capture_cancelled")
+            recordMisoperation("photo_capture_cancelled")
             return
         }
         val moments = uiState.value.journeyPhotoMoments
@@ -291,6 +382,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             evidenceVisible = false,
             researcherPanelVisible = false,
             selectedRoute = RouteChoice.RECOMMENDED,
+            adoptedRoute = RouteChoice.RECOMMENDED,
             taskResult = null,
             completedScenarios = emptySet(),
             demoCompleted = false,
@@ -298,14 +390,22 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             capturedPhotoUris = emptyList(),
             visionFindings = emptyList(),
             routeConstraintText = "",
+            replanRequestText = "",
             routePreferenceIds = setOf("shade", "rest"),
             visualQuestion = "",
             visualAnswer = null,
             journeyPhotoMoments = emptyList(),
             voiceTranscript = "",
+            voiceTranscripts = emptyList(),
             voiceInteractionCount = 0,
             visualInteractionCount = 0,
             replanCount = 0,
+            routeReplanned = false,
+            taskStartedAtMillis = 0L,
+            resultPresentedAtMillis = 0L,
+            taskMisoperationCount = 0,
+            taskAttemptCount = 0,
+            pendingPostTaskSurvey = null,
         )
         logEvent("condition_selected")
         persistState()
@@ -324,13 +424,54 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun adoptResult() {
+        if (!uiState.value.resultVisible || uiState.value.pendingPostTaskSurvey != null) return
         val currentScenario = uiState.value.scenario
-        val completed = uiState.value.completedScenarios + currentScenario
+        val now = System.currentTimeMillis()
+        val performance = TaskPerformance(
+            taskInstance = uiState.value.completedTaskCount + 1,
+            scenario = currentScenario,
+            completionTimeMs = (uiState.value.resultPresentedAtMillis - uiState.value.taskStartedAtMillis).coerceAtLeast(0L),
+            decisionTimeMs = (now - uiState.value.resultPresentedAtMillis).coerceAtLeast(0L),
+            misoperationCount = uiState.value.taskMisoperationCount,
+            attemptCount = uiState.value.taskAttemptCount.coerceAtLeast(1),
+        )
         logEvent(
             event = "result_adopted",
             action = uiState.value.selectedRoute.logValue,
             resultAdopted = "true",
+            details = "task_instance=${performance.taskInstance};completion_time_ms=${performance.completionTimeMs};decision_time_ms=${performance.decisionTimeMs};misoperations=${performance.misoperationCount};attempts=${performance.attemptCount}",
         )
+        uiState.value = uiState.value.copy(
+            isRunning = false,
+            evidenceVisible = false,
+            pendingPostTaskSurvey = performance,
+            routeReplanned = if (currentScenario == ExperimentScenario.ADJUST) {
+                uiState.value.selectedRoute == RouteChoice.RECOMMENDED
+            } else {
+                uiState.value.routeReplanned
+            },
+            adoptedRoute = if (currentScenario == ExperimentScenario.ENVIRONMENT) {
+                uiState.value.selectedRoute
+            } else {
+                uiState.value.adoptedRoute
+            },
+            statusMessage = null,
+        )
+        persistState()
+    }
+
+    fun submitPostTaskSurvey(ratings: Map<SurveyDimension, Int>) {
+        val performance = uiState.value.pendingPostTaskSurvey ?: return
+        if (SurveyDimension.entries.any { ratings[it] !in 1..7 }) return
+        val measurement = PostTaskMeasurement(performance, ratings)
+        logEvent(
+            event = "post_task_measurement",
+            action = "survey_submitted",
+            details = "measurement_version=1",
+            measurement = measurement,
+        )
+
+        val currentScenario = performance.scenario
         val nextScenario = when (currentScenario) {
             ExperimentScenario.ENVIRONMENT, ExperimentScenario.VISUAL,
             ExperimentScenario.VOICE, ExperimentScenario.ADJUST -> ExperimentScenario.EXPLORE
@@ -340,19 +481,24 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         uiState.value = uiState.value.copy(
             scenario = nextScenario ?: currentScenario,
             aiStage = if (nextScenario == null) AiStage.COMPLETE else AiStage.IDLE,
-            isRunning = false,
             resultVisible = false,
             evidenceVisible = false,
             selectedRoute = RouteChoice.RECOMMENDED,
             taskResult = null,
-            completedScenarios = completed,
+            completedScenarios = uiState.value.completedScenarios + currentScenario,
+            completedTaskCount = uiState.value.completedTaskCount + 1,
             demoCompleted = currentScenario == ExperimentScenario.CREATE,
-            voiceInteractionCount = uiState.value.voiceInteractionCount + if (currentScenario == ExperimentScenario.VOICE) 1 else 0,
-            visualInteractionCount = uiState.value.visualInteractionCount + if (currentScenario == ExperimentScenario.VISUAL) 1 else 0,
-            replanCount = uiState.value.replanCount + if (currentScenario == ExperimentScenario.ADJUST) 1 else 0,
-            statusMessage = if (currentScenario == ExperimentScenario.CREATE) "完整体验已完成" else "已返回探索工作台，可继续调用功能",
+            taskStartedAtMillis = 0L,
+            resultPresentedAtMillis = 0L,
+            taskMisoperationCount = 0,
+            taskAttemptCount = 0,
+            pendingPostTaskSurvey = null,
+            statusMessage = if (currentScenario == ExperimentScenario.CREATE) "完整体验已完成" else "问卷已保存 · 已返回探索工作台",
         )
-        if (currentScenario == ExperimentScenario.CREATE) logEvent("demo_completed")
+        if (currentScenario == ExperimentScenario.CREATE) {
+            logEvent("demo_completed")
+            persistJourneyImageIfAvailable()
+        }
         persistState()
     }
 
@@ -370,6 +516,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             resultVisible = false,
             evidenceVisible = false,
             selectedRoute = RouteChoice.RECOMMENDED,
+            adoptedRoute = RouteChoice.RECOMMENDED,
             taskResult = null,
             completedScenarios = emptySet(),
             demoCompleted = false,
@@ -377,14 +524,22 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             capturedPhotoUris = emptyList(),
             visionFindings = emptyList(),
             routeConstraintText = "",
+            replanRequestText = "",
             routePreferenceIds = setOf("shade", "rest"),
             visualQuestion = "",
             visualAnswer = null,
             journeyPhotoMoments = emptyList(),
             voiceTranscript = "",
+            voiceTranscripts = emptyList(),
             voiceInteractionCount = 0,
             visualInteractionCount = 0,
             replanCount = 0,
+            routeReplanned = false,
+            taskStartedAtMillis = 0L,
+            resultPresentedAtMillis = 0L,
+            taskMisoperationCount = 0,
+            taskAttemptCount = 0,
+            pendingPostTaskSurvey = null,
             statusMessage = null,
         )
         logEvent("demo_restarted")
@@ -403,6 +558,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
 
     fun cancelTask() {
         stopRun()
+        val nextMisoperations = uiState.value.taskMisoperationCount + 1
         uiState.value = uiState.value.copy(
             aiStage = AiStage.IDLE,
             isRunning = false,
@@ -410,13 +566,16 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             evidenceVisible = false,
             statusMessage = "本次任务已取消，可安全重新开始",
             taskResult = null,
+            resultPresentedAtMillis = 0L,
+            taskMisoperationCount = nextMisoperations,
         )
-        logEvent("task_cancelled", action = "cancel")
+        logEvent("task_cancelled", action = "cancel", details = "misoperation_count=$nextMisoperations")
         persistState()
     }
 
     fun resetTask() {
         stopRun()
+        val nextMisoperations = uiState.value.taskMisoperationCount + 1
         uiState.value = uiState.value.copy(
             aiStage = AiStage.IDLE,
             isRunning = false,
@@ -425,8 +584,17 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             selectedRoute = RouteChoice.RECOMMENDED,
             statusMessage = null,
             taskResult = null,
+            resultPresentedAtMillis = 0L,
+            taskMisoperationCount = nextMisoperations,
         )
-        logEvent("task_reset")
+        logEvent("task_reset", details = "misoperation_count=$nextMisoperations")
+        persistState()
+    }
+
+    fun recordMisoperation(reason: String = "researcher_observed") {
+        val next = uiState.value.taskMisoperationCount + 1
+        uiState.value = uiState.value.copy(taskMisoperationCount = next)
+        logEvent("misoperation_recorded", action = reason, details = "misoperation_count=$next")
         persistState()
     }
 
@@ -479,21 +647,38 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun createCurrentShareIntent(): Intent? =
-        logger.latestLogFile()?.let { file -> shareIntent(file, "text/csv", "SAGE 实验日志 ${uiState.value.participantId}") }
+        logger.createCurrentCsvExport()?.let { file -> shareIntent(file, "text/csv", "SAGE 实验日志 ${uiState.value.participantId}") }
+
+    fun createCurrentSessionArchiveShareIntent(): Intent? =
+        logger.createCurrentSessionArchive()?.let { file -> shareIntent(file, "application/zip", "SAGE 会话数据 ${uiState.value.participantId}") }
 
     fun createSessionShareIntent(fileName: String): Intent? =
-        logger.fileByName(fileName)?.let { file -> shareIntent(file, "text/csv", "SAGE 历史实验日志") }
+        logger.createSessionCsvExport(fileName)?.let { file -> shareIntent(file, "text/csv", "SAGE 历史实验日志") }
+
+    fun createHistoryJourneyShareIntent(fileName: String): Intent? =
+        logger.sessionJourneyImage(fileName)?.let { file ->
+            shareIntent(file, "image/png", "SAGE 历史知识游记").apply {
+                putExtra(Intent.EXTRA_TEXT, "我的公园知识游记")
+            }
+        }
 
     fun createAllSessionsShareIntent(): Intent? =
         logger.createAllSessionsArchive()?.let { file -> shareIntent(file, "application/zip", "SAGE 全部实验数据") }
 
-    fun createJourneyShareIntent(): Intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, "我的 SAGE 公园知识游记")
-        putExtra(
-            Intent.EXTRA_TEXT,
-            "我的公园知识游记\n\n路线：湖边林荫线 · 约 850 米\n过程照片：${uiState.value.capturedPhotoUris.size} 张\n照片问题：${uiState.value.journeyPhotoMoments.sumOf { it.questions.size }} 个\n拍照询问：${uiState.value.visualInteractionCount} 次\n语音对话：${uiState.value.voiceInteractionCount} 次\n动态重规划：${uiState.value.replanCount} 次\n\n由 SAGE Demo 根据本次旅程素材生成，分享前请核查内容。",
-        )
+    fun createJourneyShareIntent(): Intent {
+        val caption = "我的公园知识游记 · ${uiState.value.activeRouteName}\n${uiState.value.journeyPhotoMoments.size} 张照片 · ${uiState.value.voiceInteractionCount} 次语音 · ${uiState.value.replanCount} 次改道"
+        val image = journeyShareRenderer.render(uiState.value)
+        return if (image != null) {
+            shareIntent(image, "image/png", "我的 SAGE 公园知识游记").apply {
+                putExtra(Intent.EXTRA_TEXT, caption)
+            }
+        } else {
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, "我的 SAGE 公园知识游记")
+                putExtra(Intent.EXTRA_TEXT, caption)
+            }
+        }
     }
 
     override fun onCleared() {
@@ -535,6 +720,9 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             participantId = restored.participantId,
             order = restored.order,
             demoMode = restored.demoMode,
+            landmarkStyle = restored.landmarkStyle,
+            // 恢复会话时不重播开屏动画：参与者已经进入过场景，重播会干扰实验节奏。
+            welcomeShown = true,
             conditionIndex = restored.conditionIndex,
             scenario = restored.scenario,
             aiStage = if (restored.demoCompleted) AiStage.COMPLETE else AiStage.IDLE,
@@ -543,7 +731,9 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             demoCompleted = restored.demoCompleted,
             voiceTranscript = restored.voiceTranscript,
             routeConstraintText = restored.routeConstraintText,
+            replanRequestText = restored.replanRequestText,
             routePreferenceIds = restored.routePreferenceIds,
+            adoptedRoute = restored.adoptedRoute,
             capturedPhotoUri = restored.capturedPhotoUri,
             capturedPhotoUris = restored.capturedPhotoUris,
             visionFindings = restored.visionFindings,
@@ -551,9 +741,20 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             visualAnswer = restored.visualAnswer,
             journeyPhotoMoments = restoredMoments,
             voiceInteractionCount = restored.voiceInteractionCount,
+            voiceTranscripts = restored.voiceTranscripts,
             visualInteractionCount = restored.visualInteractionCount,
             replanCount = restored.replanCount,
-            statusMessage = if (restored.demoCompleted) "已恢复完成的实验会话" else "已恢复上次会话 · 中断任务可重新开始",
+            routeReplanned = restored.routeReplanned,
+            taskStartedAtMillis = restored.taskStartedAtMillis,
+            resultPresentedAtMillis = restored.resultPresentedAtMillis,
+            taskMisoperationCount = restored.taskMisoperationCount,
+            taskAttemptCount = restored.taskAttemptCount,
+            pendingPostTaskSurvey = restored.pendingPostTaskSurvey,
+            statusMessage = when {
+                restored.pendingPostTaskSurvey != null -> "已恢复待提交的任务后问卷"
+                restored.demoCompleted -> "已恢复完成的实验会话"
+                else -> "已恢复上次会话 · 中断任务可重新开始"
+            },
         )
         logEvent("session_restored")
         persistState()
@@ -598,8 +799,24 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         "quiet" to "避开人群",
     ).filter { it.first in ids }.joinToString("、") { it.second }
 
+    private fun visualSubject(label: String?, fixedFlowerStimulus: Boolean): String {
+        if (fixedFlowerStimulus) return "粉红色月季或蔷薇类花卉"
+        val normalized = label.orEmpty().trim()
+        return when {
+            normalized.isBlank() -> "圈选主体"
+            normalized in setOf("主体区域", "环境线索", "表面特征", "圈选区域", "圈选内容") -> "圈选主体"
+            normalized in setOf("花朵", "植物", "花瓣", "花园", "叶片", "自然") -> "画面中的花卉植物"
+            else -> normalized
+        }
+    }
+
     private fun persistState() {
         sessionStore.save(uiState.value, logger.activeLogFileName())
+    }
+
+    private fun persistJourneyImageIfAvailable() {
+        if (uiState.value.journeyPhotoMoments.isEmpty() && uiState.value.completedTaskCount == 0) return
+        journeyShareRenderer.render(uiState.value)?.let(logger::storeJourneyImage)
     }
 
     private fun shareIntent(file: File, mimeType: String, subject: String): Intent {
@@ -618,6 +835,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         action: String = "",
         resultAdopted: String = "",
         details: String = "",
+        measurement: PostTaskMeasurement? = null,
     ) {
         val state = uiState.value
         if (!state.sessionStarted) return
@@ -631,6 +849,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             action = action,
             resultAdopted = resultAdopted,
             details = details,
+            measurement = measurement,
         )
     }
 }

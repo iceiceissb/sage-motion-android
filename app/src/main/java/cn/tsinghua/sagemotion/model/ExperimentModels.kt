@@ -19,6 +19,68 @@ enum class ConditionOrder(
     BCA("B → C → A", listOf(ExperimentCondition.SEMANTIC, ExperimentCondition.SAGE_FULL, ExperimentCondition.BASELINE)),
     CAB("C → A → B", listOf(ExperimentCondition.SAGE_FULL, ExperimentCondition.BASELINE, ExperimentCondition.SEMANTIC)),
     CBA("C → B → A", listOf(ExperimentCondition.SAGE_FULL, ExperimentCondition.SEMANTIC, ExperimentCondition.BASELINE)),
+
+    // 两条件对照。评审建议：正式实验可能只保留「对照基线 VS 我们的设计」两个条件，
+    // 招募时就排好顺序，主试在设置页核对即可。六种拉丁方顺序仍然保留，不做删减。
+    AC("同应用基线 → SAGE", listOf(ExperimentCondition.BASELINE, ExperimentCondition.SAGE_FULL)),
+    CA("SAGE → 同应用基线", listOf(ExperimentCondition.SAGE_FULL, ExperimentCondition.BASELINE)),
+    ;
+
+    /** 两条件对照组，用于设置页分组显示。 */
+    val isPairedComparison: Boolean get() = conditions.size == 2
+}
+
+/**
+ * 沿途地标的呈现形态。
+ *
+ * 对应设计建议便签：「看看地标是 1. 数字形式 2. icon形式 3. 3D效果
+ * （访谈中有人建议这样和圆周旅迹区分开来）」。
+ * 三种都实现并可在研究员设置页切换，默认用带高度的 [DEPTH]。
+ */
+enum class LandmarkStyle(val label: String, val description: String) {
+    NUMBER("数字标注", "圆周旅迹式的顺序编号，读顺序最快"),
+    ICON("图标标注", "用场地类型图形区分，读语义最快"),
+    DEPTH("立体标注", "带底座与投影的立体锚点，和平面标注拉开层次"),
+}
+
+/**
+ * 八家郊野公园南园的沿途点位。
+ *
+ * 南园分为管理服务中心、康体健身步道、综合运动区、儿童活动区和生态湖区五个区；
+ * 公园在提升建设中突出戏曲文化主题，并大量应用北京地区乡土宿根花卉。
+ * 这些点位既用于 A 的路线标注，也用于 C 的手账拼贴节点。
+ *
+ * @param routeFraction 该点位在主推荐路线上的位置比例（0 起点，1 终点）。
+ */
+data class ParkLandmark(
+    val id: String,
+    val name: String,
+    val zone: String,
+    val glyph: LandmarkGlyph,
+    val routeFraction: Float,
+    val minutesFromStart: Int,
+    val note: String,
+)
+
+/** 地标图形。用形状而不是颜色区分类型，满足「状态不只依赖颜色」的无障碍约束。 */
+enum class LandmarkGlyph { GATE, WATER, GROVE, STAGE, REST, PLAY }
+
+object ParkRoute {
+    const val NAME = "湖边林荫线"
+    const val ALTERNATIVE_NAME = "草坪外环线"
+    const val START_POINT = "八家郊野公园南园 · 南门"
+    const val TOTAL_DISTANCE_METERS = 850
+    const val TOTAL_MINUTES = 12
+
+    /** 主推荐路线沿途点位，按路程顺序排列。 */
+    val LANDMARKS = listOf(
+        ParkLandmark("gate", "南园南门", "管理服务中心", LandmarkGlyph.GATE, .00f, 0, "出发点，公园导览图与饮水点都在这里"),
+        ParkLandmark("grove", "乡土宿根花境", "康体健身步道", LandmarkGlyph.GROVE, .22f, 3, "北京乡土宿根花卉群落，四季可观"),
+        ParkLandmark("stage", "戏曲文化林地", "康体健身步道", LandmarkGlyph.STAGE, .43f, 5, "南园戏曲主题节点，古曲戏文场景与植物意向结合"),
+        ParkLandmark("rest", "林荫休息廊", "综合运动区", LandmarkGlyph.REST, .62f, 8, "连续树荫与座椅，适合中途休息"),
+        ParkLandmark("water", "生态湖区观景点", "生态湖区", LandmarkGlyph.WATER, .84f, 10, "南园水面最开阔的一段，逆光时段适合拍照"),
+        ParkLandmark("play", "儿童活动区外环", "儿童活动区", LandmarkGlyph.PLAY, 1.00f, 12, "人流较多，作为路线终点便于离园"),
+    )
 }
 
 enum class ExperimentScenario(
@@ -109,17 +171,52 @@ enum class DemoMode(
     ),
 }
 
+/** 三种实验条件共用的任务后 1–7 点量表，题目、顺序和量尺保持完全一致。 */
+enum class SurveyDimension(
+    val exportId: String,
+    val shortLabel: String,
+    val statement: String,
+    val lowAnchor: String,
+    val highAnchor: String,
+) {
+    STATE_RECOGNITION("state_recognition", "状态识别", "我能判断 AI 当前处于哪个处理阶段。", "完全不能", "完全能"),
+    PROCESS_UNDERSTANDING("process_understanding", "过程理解", "我理解 AI 是如何得到刚才这个结果的。", "完全不理解", "完全理解"),
+    CALIBRATED_TRUST("calibrated_trust", "校准信任", "我知道刚才的结果在什么情况下可以相信、什么情况下需要核查。", "完全不知道", "非常清楚"),
+    PERCEIVED_CONTROL("perceived_control", "可控感", "在刚才的任务中，我可以修改、拒绝或接管 AI 的建议。", "完全不同意", "完全同意"),
+    WORKLOAD("workload", "工作负荷", "完成刚才的任务需要我付出很多注意力和思考。", "负荷很低", "负荷很高"),
+}
+
+/** 单次任务从启动到作答前的客观行为指标。 */
+data class TaskPerformance(
+    val taskInstance: Int,
+    val scenario: ExperimentScenario,
+    val completionTimeMs: Long,
+    val decisionTimeMs: Long,
+    val misoperationCount: Int,
+    val attemptCount: Int,
+)
+
+/** 写入会话 CSV 的一次完整任务后测量。 */
+data class PostTaskMeasurement(
+    val performance: TaskPerformance,
+    val ratings: Map<SurveyDimension, Int>,
+)
+
 data class ExperimentUiState(
     val sessionStarted: Boolean = false,
     val participantId: String = "",
     val order: ConditionOrder = ConditionOrder.ABC,
     val demoMode: DemoMode = DemoMode.EXPERIMENT_OFFLINE,
+    val landmarkStyle: LandmarkStyle = LandmarkStyle.DEPTH,
+    val welcomeShown: Boolean = false,
     val conditionIndex: Int = 0,
     val scenario: ExperimentScenario = ExperimentScenario.ENVIRONMENT,
     val aiStage: AiStage = AiStage.IDLE,
     val isRunning: Boolean = false,
     val resultVisible: Boolean = false,
     val selectedRoute: RouteChoice = RouteChoice.RECOMMENDED,
+    /** A 任务中真正采纳的路线。selectedRoute 仅表示当前结果面板里的临时选择。 */
+    val adoptedRoute: RouteChoice = RouteChoice.RECOMMENDED,
     val evidenceVisible: Boolean = false,
     val researcherPanelVisible: Boolean = false,
     val completedTaskCount: Int = 0,
@@ -131,8 +228,10 @@ data class ExperimentUiState(
     val historySessions: List<SessionSummary> = emptyList(),
     val selectedHistory: SessionDetail? = null,
     val routeConstraintText: String = "",
+    val replanRequestText: String = "",
     val routePreferenceIds: Set<String> = setOf("shade", "rest"),
     val voiceTranscript: String = "",
+    val voiceTranscripts: List<String> = emptyList(),
     val capturedPhotoUri: String? = null,
     val capturedPhotoUris: List<String> = emptyList(),
     val visionFindings: List<VisionFinding> = emptyList(),
@@ -143,9 +242,22 @@ data class ExperimentUiState(
     val voiceInteractionCount: Int = 0,
     val visualInteractionCount: Int = 0,
     val replanCount: Int = 0,
+    val routeReplanned: Boolean = false,
+    val taskStartedAtMillis: Long = 0L,
+    val resultPresentedAtMillis: Long = 0L,
+    val taskMisoperationCount: Int = 0,
+    val taskAttemptCount: Int = 0,
+    val pendingPostTaskSurvey: TaskPerformance? = null,
 ) {
     val condition: ExperimentCondition
         get() = order.conditions[conditionIndex]
+
+    val activeRouteName: String
+        get() = when {
+            routeReplanned -> "林下连廊绕行线"
+            adoptedRoute == RouteChoice.ALTERNATIVE -> ParkRoute.ALTERNATIVE_NAME
+            else -> ParkRoute.NAME
+        }
 
     val conditionProgress: String
         get() = "${conditionIndex + 1} / ${order.conditions.size}"
@@ -224,6 +336,7 @@ data class HistoryEvent(
 data class SessionDetail(
     val summary: SessionSummary,
     val events: List<HistoryEvent>,
+    val journeyImagePath: String? = null,
 )
 
 fun stageSequenceFor(scenario: ExperimentScenario): List<AiStage> = when (scenario) {
