@@ -116,7 +116,7 @@ class ExperimentSessionStore(context: Context) {
             order = restoredOrder,
             demoMode = enumValueOrDefault(
                 preferences.getString(KEY_DEMO_MODE, null),
-                DemoMode.EXPERIMENT_OFFLINE,
+                DemoMode.ONLINE_AGENT,
             ),
             // 条件数量随顺序而变（六种拉丁方是 3 个，两条件对照是 2 个），
             // 必须按实际顺序长度收敛，否则恢复会话时会越界。

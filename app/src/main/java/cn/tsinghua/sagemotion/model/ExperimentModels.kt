@@ -206,7 +206,7 @@ data class ExperimentUiState(
     val sessionStarted: Boolean = false,
     val participantId: String = "",
     val order: ConditionOrder = ConditionOrder.ABC,
-    val demoMode: DemoMode = DemoMode.EXPERIMENT_OFFLINE,
+    val demoMode: DemoMode = DemoMode.ONLINE_AGENT,
     val landmarkStyle: LandmarkStyle = LandmarkStyle.DEPTH,
     val welcomeShown: Boolean = false,
     val conditionIndex: Int = 0,

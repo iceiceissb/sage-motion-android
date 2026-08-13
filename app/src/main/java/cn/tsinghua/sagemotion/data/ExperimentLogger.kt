@@ -88,6 +88,7 @@ class ExperimentLogger(private val context: Context) {
             measurement?.ratings?.get(SurveyDimension.CALIBRATED_TRUST)?.toString().orEmpty(),
             measurement?.ratings?.get(SurveyDimension.PERCEIVED_CONTROL)?.toString().orEmpty(),
             measurement?.ratings?.get(SurveyDimension.WORKLOAD)?.toString().orEmpty(),
+            measurement?.performance?.let { (it.completionTimeMs + it.decisionTimeMs).toString() }.orEmpty(),
         )
         file.appendText(CsvCodec.encodeRow(values) + "\n", Charsets.UTF_8)
     }
@@ -237,16 +238,20 @@ class ExperimentLogger(private val context: Context) {
     }
 
     private fun taskMeasurementSummary(file: File): ByteArray {
-        val rows = readRows(file).filter { it.size >= 23 && it[8] == "post_task_measurement" }
+        val rows = readRows(file).filter { it.size >= 23 && it[8] in setOf("post_task_measurement", "task_measurement") }
         val summaryHeader = listOf(
             "participant_id", "condition_id", "condition_order", "task_id", "task_phase", "task_instance",
-            "completion_time_ms", "decision_time_ms", "misoperation_count", "attempt_count",
+            "completion_time_ms", "decision_time_ms", "operation_time_ms", "misoperation_count", "attempt_count",
             "state_recognition", "process_understanding", "calibrated_trust", "perceived_control", "workload",
         )
         return buildString {
             append(CsvCodec.encodeRow(summaryHeader)).append('\n')
             rows.forEach { row ->
-                append(CsvCodec.encodeRow(listOf(row[2], row[3], row[4], row[5], row[6]) + row.subList(13, 23))).append('\n')
+                val operationTime = row.getOrNull(23).orEmpty().ifBlank {
+                    ((row[14].toLongOrNull() ?: 0L) + (row[15].toLongOrNull() ?: 0L)).toString()
+                }
+                val taskValues = listOf(row[13], row[14], row[15], operationTime, row[16], row[17]) + row.subList(18, 23)
+                append(CsvCodec.encodeRow(listOf(row[2], row[3], row[4], row[5], row[6]) + taskValues)).append('\n')
             }
         }.toByteArray(Charsets.UTF_8)
     }
@@ -312,21 +317,19 @@ class ExperimentLogger(private val context: Context) {
         const val COLUMN_COUNT = 13 // Old files remain readable; new measurement columns are appended.
         val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
         const val CSV_HEADER =
-            "wall_clock_ms,elapsed_ms,participant_id,condition_id,condition_order,task_id,task_phase,ai_state,event,user_action,confidence,result_adopted,details,task_instance,completion_time_ms,decision_time_ms,misoperation_count,attempt_count,state_recognition,process_understanding,calibrated_trust,perceived_control,workload"
+            "wall_clock_ms,elapsed_ms,participant_id,condition_id,condition_order,task_id,task_phase,ai_state,event,user_action,confidence,result_adopted,details,task_instance,completion_time_ms,decision_time_ms,misoperation_count,attempt_count,state_recognition,process_understanding,calibrated_trust,perceived_control,workload,operation_time_ms"
 
         val DATA_DICTIONARY = """
             SAGE Motion 预实验数据字典（UTF-8）
 
-            每次任务完成后会写入一行 event=post_task_measurement：
+            每次任务完成后会自动写入一行 event=task_measurement（不再显示或收集任务后问卷）：
             - task_instance：当前会话内已完成任务的顺序号
             - completion_time_ms：点击启动任务至结果首次呈现的时间
             - decision_time_ms：结果首次呈现至用户采纳或确认的时间
+            - operation_time_ms：首次启动任务至用户采纳或确认的总操作时间
             - misoperation_count：取消、重置、拍照失败及研究员人工补记的总数
             - attempt_count：该任务实例的启动尝试次数
-            - state_recognition / process_understanding / calibrated_trust /
-              perceived_control / workload：1–7 点量表；工作负荷越高表示负荷越高
-
-            三个实验条件使用相同题目顺序、量尺和提交流程。
+            - 旧版问卷字段保留用于兼容已有 CSV；新版记录中为空
             ZIP 中原始会话 CSV 是完整事件流；*_task_measurements.csv 是一行一个任务的分析表。
             推荐主分析使用任务汇总表，状态进入/退出事件用于操作核查与过程分析。
         """.trimIndent()

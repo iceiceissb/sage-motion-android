@@ -8,7 +8,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cn.tsinghua.sagemotion.ExperimentViewModel
 import cn.tsinghua.sagemotion.ui.screens.ExperimentScreen
 import cn.tsinghua.sagemotion.ui.screens.HistoryScreen
-import cn.tsinghua.sagemotion.ui.screens.PostTaskSurveyScreen
 import cn.tsinghua.sagemotion.ui.screens.ResearcherSetupScreen
 import cn.tsinghua.sagemotion.ui.screens.WelcomeScreen
 
@@ -59,14 +58,6 @@ fun SageMotionApp(viewModel: ExperimentViewModel = viewModel()) {
         WelcomeScreen(
             participantId = state.participantId,
             onEnter = viewModel::completeWelcome,
-        )
-        return
-    }
-
-    state.pendingPostTaskSurvey?.let { performance ->
-        PostTaskSurveyScreen(
-            performance = performance,
-            onSubmit = viewModel::submitPostTaskSurvey,
         )
         return
     }

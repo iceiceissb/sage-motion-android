@@ -1612,11 +1612,6 @@ private fun VoiceExperiment(
     } else {
         rememberRealSpeechInputState(state.voiceTranscript, onVoiceTranscript)
     }
-    LaunchedEffect(state.resultVisible, state.taskResult?.summary, ttsReady) {
-        if (state.resultVisible && ttsReady) {
-            state.taskResult?.summary?.let { tts?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "sage_answer") }
-        }
-    }
     Box(Modifier.fillMaxSize().background(Color(0xFFE8ECE8))) {
         Image(painterResource(R.drawable.park_map_background), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = .48f)
         Box(Modifier.fillMaxSize().background(Color(0xFFDCE6E0).copy(alpha = .54f)))

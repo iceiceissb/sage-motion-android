@@ -59,10 +59,10 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
 
     fun startSession(
         participantId: String,
-        order: ConditionOrder,
-        demoMode: DemoMode,
-        landmarkStyle: LandmarkStyle = LandmarkStyle.DEPTH,
     ) {
+        val order = ConditionOrder.ABC
+        val demoMode = DemoMode.ONLINE_AGENT
+        val landmarkStyle = LandmarkStyle.DEPTH
         val normalizedId = participantId.trim().ifBlank { "P000" }
         logger.startSession(normalizedId)
         uiState.value = ExperimentUiState(
@@ -115,7 +115,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun runCurrentScenario() {
-        if (uiState.value.isRunning || uiState.value.demoCompleted || uiState.value.pendingPostTaskSurvey != null || uiState.value.scenario == ExperimentScenario.EXPLORE) return
+        if (uiState.value.isRunning || uiState.value.demoCompleted || uiState.value.scenario == ExperimentScenario.EXPLORE) return
         runJob?.cancel()
         val now = System.currentTimeMillis()
         uiState.value = uiState.value.copy(
@@ -424,7 +424,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun adoptResult() {
-        if (!uiState.value.resultVisible || uiState.value.pendingPostTaskSurvey != null) return
+        if (!uiState.value.resultVisible) return
         val currentScenario = uiState.value.scenario
         val now = System.currentTimeMillis()
         val performance = TaskPerformance(
@@ -435,43 +435,23 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             misoperationCount = uiState.value.taskMisoperationCount,
             attemptCount = uiState.value.taskAttemptCount.coerceAtLeast(1),
         )
+        val operationTimeMs = (now - uiState.value.taskStartedAtMillis).coerceAtLeast(0L)
         logEvent(
             event = "result_adopted",
             action = uiState.value.selectedRoute.logValue,
             resultAdopted = "true",
-            details = "task_instance=${performance.taskInstance};completion_time_ms=${performance.completionTimeMs};decision_time_ms=${performance.decisionTimeMs};misoperations=${performance.misoperationCount};attempts=${performance.attemptCount}",
+            details = "task_instance=${performance.taskInstance};completion_time_ms=${performance.completionTimeMs};decision_time_ms=${performance.decisionTimeMs};operation_time_ms=$operationTimeMs;misoperations=${performance.misoperationCount};attempts=${performance.attemptCount}",
         )
-        uiState.value = uiState.value.copy(
-            isRunning = false,
-            evidenceVisible = false,
-            pendingPostTaskSurvey = performance,
-            routeReplanned = if (currentScenario == ExperimentScenario.ADJUST) {
-                uiState.value.selectedRoute == RouteChoice.RECOMMENDED
-            } else {
-                uiState.value.routeReplanned
-            },
-            adoptedRoute = if (currentScenario == ExperimentScenario.ENVIRONMENT) {
-                uiState.value.selectedRoute
-            } else {
-                uiState.value.adoptedRoute
-            },
-            statusMessage = null,
+        logEvent(
+            event = "task_measurement",
+            action = "task_completed",
+            details = "measurement_version=2;operation_time_ms=$operationTimeMs",
+            measurement = PostTaskMeasurement(performance, emptyMap()),
         )
-        persistState()
+        completeTask(performance.scenario)
     }
 
-    fun submitPostTaskSurvey(ratings: Map<SurveyDimension, Int>) {
-        val performance = uiState.value.pendingPostTaskSurvey ?: return
-        if (SurveyDimension.entries.any { ratings[it] !in 1..7 }) return
-        val measurement = PostTaskMeasurement(performance, ratings)
-        logEvent(
-            event = "post_task_measurement",
-            action = "survey_submitted",
-            details = "measurement_version=1",
-            measurement = measurement,
-        )
-
-        val currentScenario = performance.scenario
+    private fun completeTask(currentScenario: ExperimentScenario) {
         val nextScenario = when (currentScenario) {
             ExperimentScenario.ENVIRONMENT, ExperimentScenario.VISUAL,
             ExperimentScenario.VOICE, ExperimentScenario.ADJUST -> ExperimentScenario.EXPLORE
@@ -482,6 +462,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             scenario = nextScenario ?: currentScenario,
             aiStage = if (nextScenario == null) AiStage.COMPLETE else AiStage.IDLE,
             resultVisible = false,
+            isRunning = false,
             evidenceVisible = false,
             selectedRoute = RouteChoice.RECOMMENDED,
             taskResult = null,
@@ -493,7 +474,17 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             taskMisoperationCount = 0,
             taskAttemptCount = 0,
             pendingPostTaskSurvey = null,
-            statusMessage = if (currentScenario == ExperimentScenario.CREATE) "完整体验已完成" else "问卷已保存 · 已返回探索工作台",
+            routeReplanned = if (currentScenario == ExperimentScenario.ADJUST) {
+                uiState.value.selectedRoute == RouteChoice.RECOMMENDED
+            } else {
+                uiState.value.routeReplanned
+            },
+            adoptedRoute = if (currentScenario == ExperimentScenario.ENVIRONMENT) {
+                uiState.value.selectedRoute
+            } else {
+                uiState.value.adoptedRoute
+            },
+            statusMessage = if (currentScenario == ExperimentScenario.CREATE) "完整体验已完成" else "任务操作时间已保存 · 已返回探索工作台",
         )
         if (currentScenario == ExperimentScenario.CREATE) {
             logEvent("demo_completed")

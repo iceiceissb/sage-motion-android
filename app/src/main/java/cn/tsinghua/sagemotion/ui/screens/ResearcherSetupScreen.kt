@@ -6,8 +6,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,7 +23,6 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
@@ -42,28 +39,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cn.tsinghua.sagemotion.model.ConditionOrder
-import cn.tsinghua.sagemotion.model.DemoMode
-import cn.tsinghua.sagemotion.model.LandmarkStyle
-import cn.tsinghua.sagemotion.model.ParkRoute
 import cn.tsinghua.sagemotion.ui.theme.SageGreen
 import cn.tsinghua.sagemotion.ui.theme.SageInk
 import cn.tsinghua.sagemotion.ui.theme.SageMist
 import cn.tsinghua.sagemotion.ui.theme.SageMuted
 import cn.tsinghua.sagemotion.ui.theme.SageSurface
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ResearcherSetupScreen(
-    onStart: (String, ConditionOrder, DemoMode, LandmarkStyle) -> Unit,
+    onStart: (String) -> Unit,
     onHistory: () -> Unit,
     savedSessionCount: Int,
     statusMessage: String?,
 ) {
     var participantId by rememberSaveable { mutableStateOf("") }
-    var selectedOrder by rememberSaveable { mutableStateOf(ConditionOrder.ABC) }
-    var selectedMode by rememberSaveable { mutableStateOf(DemoMode.EXPERIMENT_OFFLINE) }
-    var selectedLandmark by rememberSaveable { mutableStateOf(LandmarkStyle.DEPTH) }
 
     Box(
         modifier = Modifier
@@ -97,7 +86,7 @@ fun ResearcherSetupScreen(
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
-                text = "研究员设置 · 参与者不会看到条件名称",
+                text = "研究员设置",
                 color = Color(0xFF6C7671),
                 fontSize = 14.sp,
                 modifier = Modifier.padding(top = 6.dp, bottom = 28.dp),
@@ -123,119 +112,11 @@ fun ResearcherSetupScreen(
                             .fillMaxWidth()
                             .padding(top = 10.dp),
                     )
-                    Spacer(Modifier.height(22.dp))
-                    Text("条件顺序（Latin square）", fontWeight = FontWeight.Medium, color = SageInk)
-                    FlowRow(
-                        modifier = Modifier.padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        ConditionOrder.entries.filterNot { it.isPairedComparison }.forEach { order ->
-                            FilterChip(
-                                selected = selectedOrder == order,
-                                onClick = { selectedOrder = order },
-                                label = { Text(order.label) },
-                            )
-                        }
-                    }
-                    Text(
-                        text = "A = Baseline　B = Semantic Motion　C = SAGE Full",
-                        fontSize = 12.sp,
-                        color = Color(0xFF7A837F),
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-
-                    // 两条件对照。评审意见：正式实验可能只跑「对照基线 VS 我们的设计」，
-                    // 招募时已排好顺序，这里由主试核对。三条件顺序仍然保留。
-                    Spacer(Modifier.height(14.dp))
-                    Text("或：同应用两条件对照", fontWeight = FontWeight.Medium, color = SageInk)
-                    FlowRow(
-                        modifier = Modifier.padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        ConditionOrder.entries.filter { it.isPairedComparison }.forEach { order ->
-                            FilterChip(
-                                selected = selectedOrder == order,
-                                onClick = { selectedOrder = order },
-                                label = { Text(order.label) },
-                            )
-                        }
-                    }
-                    Text(
-                        text = "两条件用于比较同一 APP 的通用反馈与 SAGE 完整动效，功能、内容和任务保持一致；不是与某个品牌手机直接做产品对比。",
-                        fontSize = 11.sp,
-                        lineHeight = 17.sp,
-                        color = SageMuted,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                    Text(
-                        text = "当前设置：${selectedOrder.conditions.size} 个条件 · ${selectedOrder.conditions.joinToString(" → ") { it.id }}",
-                        fontSize = 12.sp,
-                        color = SageGreen,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-
-                    Spacer(Modifier.height(20.dp))
-                    Text("沿途地标形态", fontWeight = FontWeight.Medium, color = SageInk)
-                    Text(
-                        "参考圆周旅迹把路途地点标注出来；访谈中有人建议用立体形态与之区分。",
-                        fontSize = 11.sp,
-                        color = SageMuted,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(top = 8.dp),
-                    ) {
-                        LandmarkStyle.entries.forEach { style ->
-                            FilterChip(
-                                selected = selectedLandmark == style,
-                                onClick = { selectedLandmark = style },
-                                label = {
-                                    Column(Modifier.padding(vertical = 3.dp)) {
-                                        Text(style.label, fontWeight = FontWeight.Medium)
-                                        Text(style.description, fontSize = 11.sp, color = SageMuted)
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(20.dp))
-                    Text("运行模式", fontWeight = FontWeight.Medium, color = SageInk)
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(top = 8.dp),
-                    ) {
-                        DemoMode.entries.forEach { mode ->
-                            FilterChip(
-                                selected = selectedMode == mode,
-                                onClick = { selectedMode = mode },
-                                label = {
-                                    Column(Modifier.padding(vertical = 3.dp)) {
-                                        Text(mode.label, fontWeight = FontWeight.Medium)
-                                        Text(mode.description, fontSize = 11.sp, color = Color(0xFF6C7671))
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                    }
-                    if (selectedMode == DemoMode.ONLINE_AGENT) {
-                        Text(
-                            "起点为 ${ParkRoute.START_POINT}，接入实时环境与附近地点工具；接口失败自动回退到离线脚本。" +
-                                "联网与离线两种模式在日志中区分，分析时请分别标注。",
-                            fontSize = 11.sp,
-                            color = Color(0xFF805024),
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                    }
                 }
             }
 
             Button(
-                onClick = { onStart(participantId, selectedOrder, selectedMode, selectedLandmark) },
+                onClick = { onStart(participantId) },
                 enabled = participantId.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -244,7 +125,7 @@ fun ResearcherSetupScreen(
                 shape = RoundedCornerShape(18.dp),
             ) {
                 Text(
-                    if (selectedMode == DemoMode.ONLINE_AGENT) "启动联网 Agent 演示" else "开始实验会话",
+                    "开始实验会话",
                     fontSize = 17.sp,
                 )
             }
