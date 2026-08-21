@@ -708,17 +708,22 @@ fun BreathingVoiceOrb(active: Boolean, stage: AiStage, modifier: Modifier = Modi
         Canvas(Modifier.size(94.dp)) {
             drawCircle(SageMist.copy(alpha = .82f))
             drawCircle(SageGreenDark.copy(alpha = .18f), radius = size.minDimension * .38f, style = Stroke(2.dp.toPx()))
-            drawCircle(SageGreen, radius = size.minDimension * .31f)
+            drawCircle(SageGreen.copy(alpha = .18f), radius = size.minDimension * .31f)
             if (active) {
                 repeat(3) { index ->
                     val x = center.x + (index - 1) * 10.dp.toPx()
                     val bar = (8f + abs(sin((pulse + index) * PI.toFloat())) * 11f + inputLevel * (20f - index * 2f)).dp.toPx()
-                    drawLine(Color.White, Offset(x, center.y - bar / 2f), Offset(x, center.y + bar / 2f), 3.dp.toPx(), StrokeCap.Round)
+                    drawLine(SageGreen.copy(alpha = .28f), Offset(x, center.y - bar / 2f), Offset(x, center.y + bar / 2f), 3.dp.toPx(), StrokeCap.Round)
                 }
             } else {
                 drawCircle(Color.White, 5.dp.toPx(), center)
             }
         }
+        AnimatedMascot(
+            mood = MascotMood.LISTENING,
+            contentDescription = "银小叶正在倾听",
+            modifier = Modifier.size(82.dp),
+        )
     }
 }
 

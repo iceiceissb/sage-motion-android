@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cn.tsinghua.sagemotion.ExperimentViewModel
+import cn.tsinghua.sagemotion.ui.components.AmapPrivacyGate
 import cn.tsinghua.sagemotion.ui.screens.ExperimentScreen
 import cn.tsinghua.sagemotion.ui.screens.HistoryScreen
 import cn.tsinghua.sagemotion.ui.screens.ResearcherSetupScreen
@@ -62,45 +63,47 @@ fun SageMotionApp(viewModel: ExperimentViewModel = viewModel()) {
         return
     }
 
-    ExperimentScreen(
-        state = state,
-        onRunScenario = viewModel::runCurrentScenario,
-        onCancel = viewModel::cancelTask,
-        onReset = viewModel::resetTask,
-        onRestartDemo = viewModel::restartDemo,
-        onFinishSession = viewModel::finishSession,
-        onAdopt = viewModel::adoptResult,
-        onEvidence = viewModel::showEvidence,
-        onCloseEvidence = viewModel::hideEvidence,
-        onRouteSelected = viewModel::selectRoute,
-        onScenarioSelected = viewModel::setScenario,
-        onConditionSelected = viewModel::setConditionIndex,
-        onNextCondition = viewModel::nextCondition,
-        onPreviewPrevious = viewModel::previewPreviousStage,
-        onPreviewNext = viewModel::previewNextStage,
-        onResearcherPanel = viewModel::setResearcherPanelVisible,
-        onHistory = viewModel::openHistory,
-        onExport = {
-            launchShare(viewModel.createCurrentShareIntent(), "导出实验日志")
-        },
-        onExportCurrentZip = {
-            launchShare(viewModel.createCurrentSessionArchiveShareIntent(), "导出本次会话 ZIP")
-        },
-        onExportAll = {
-            launchShare(viewModel.createAllSessionsShareIntent(), "导出全部实验数据")
-        },
-        onVoiceTranscript = viewModel::setVoiceTranscript,
-        onRouteConstraintChanged = viewModel::setRouteConstraint,
-        onReplanRequestChanged = viewModel::setReplanRequest,
-        onRoutePreferenceToggled = viewModel::toggleRoutePreference,
-        onVisualQuestionAsked = viewModel::askVisualQuestion,
-        onClearVisualQuestion = viewModel::clearVisualQuestion,
-        onCreatePhotoUri = viewModel::createPhotoCaptureUri,
-        onPhotoCaptured = viewModel::onPhotoCaptureCompleted,
-        onShareJourney = {
-            launchShare(viewModel.createJourneyShareIntent(), "分享知识游记")
-        },
-        onBeginJourneySummary = viewModel::beginJourneySummary,
-        onRecordMisoperation = viewModel::recordMisoperation,
-    )
+    AmapPrivacyGate {
+        ExperimentScreen(
+            state = state,
+            onRunScenario = viewModel::runCurrentScenario,
+            onCancel = viewModel::cancelTask,
+            onReset = viewModel::resetTask,
+            onRestartDemo = viewModel::restartDemo,
+            onFinishSession = viewModel::finishSession,
+            onAdopt = viewModel::adoptResult,
+            onEvidence = viewModel::showEvidence,
+            onCloseEvidence = viewModel::hideEvidence,
+            onRouteSelected = viewModel::selectRoute,
+            onScenarioSelected = viewModel::setScenario,
+            onConditionSelected = viewModel::setConditionIndex,
+            onNextCondition = viewModel::nextCondition,
+            onPreviewPrevious = viewModel::previewPreviousStage,
+            onPreviewNext = viewModel::previewNextStage,
+            onResearcherPanel = viewModel::setResearcherPanelVisible,
+            onHistory = viewModel::openHistory,
+            onExport = {
+                launchShare(viewModel.createCurrentShareIntent(), "导出实验日志")
+            },
+            onExportCurrentZip = {
+                launchShare(viewModel.createCurrentSessionArchiveShareIntent(), "导出本次会话 ZIP")
+            },
+            onExportAll = {
+                launchShare(viewModel.createAllSessionsShareIntent(), "导出全部实验数据")
+            },
+            onVoiceTranscript = viewModel::setVoiceTranscript,
+            onRouteConstraintChanged = viewModel::setRouteConstraint,
+            onReplanRequestChanged = viewModel::setReplanRequest,
+            onRoutePreferenceToggled = viewModel::toggleRoutePreference,
+            onVisualQuestionAsked = viewModel::askVisualQuestion,
+            onClearVisualQuestion = viewModel::clearVisualQuestion,
+            onCreatePhotoUri = viewModel::createPhotoCaptureUri,
+            onPhotoCaptured = viewModel::onPhotoCaptureCompleted,
+            onShareJourney = {
+                launchShare(viewModel.createJourneyShareIntent(), "分享知识游记")
+            },
+            onBeginJourneySummary = viewModel::beginJourneySummary,
+            onRecordMisoperation = viewModel::recordMisoperation,
+        )
+    }
 }

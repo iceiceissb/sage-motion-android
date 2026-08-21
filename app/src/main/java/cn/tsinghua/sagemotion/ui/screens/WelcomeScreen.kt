@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -44,10 +45,18 @@ import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cn.tsinghua.sagemotion.R
+import cn.tsinghua.sagemotion.ui.components.AnimatedMascot
+import cn.tsinghua.sagemotion.ui.components.FrostedGlassSurface
+import cn.tsinghua.sagemotion.ui.components.MascotMood
+import cn.tsinghua.sagemotion.ui.components.sageBubbleShape
 import cn.tsinghua.sagemotion.ui.theme.SageCanopy
 import cn.tsinghua.sagemotion.ui.theme.SageDawn
 import cn.tsinghua.sagemotion.ui.theme.SageGreen
@@ -59,7 +68,6 @@ import cn.tsinghua.sagemotion.ui.theme.SageMuted
 import cn.tsinghua.sagemotion.ui.theme.SageOpera
 import cn.tsinghua.sagemotion.ui.theme.SageSky
 import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.sin
 
 /**
@@ -82,11 +90,12 @@ fun WelcomeScreen(
     // 单一时间轴驱动全部分层，保证各层节奏严格对齐。
     var started by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { started = true }
-    val timeline by animateFloatAsState(
+    val animatedTimeline by animateFloatAsState(
         targetValue = if (started) 1f else 0f,
         animationSpec = tween(durationMillis = 4_200, easing = SageMotion.Easing.Standard),
         label = "welcomeTimeline",
     )
+    val timeline = if (LocalInspectionMode.current) 1f else animatedTimeline
 
     val ambient = rememberInfiniteTransition(label = "welcomeAmbient")
     val drift by ambient.animateFloat(
@@ -257,6 +266,21 @@ fun WelcomeScreen(
             }
         }
 
+        // 原创银杏叶向导 IP：最后进入场景，作为 AI “在场”的具体形象。
+        AnimatedMascot(
+            mood = MascotMood.IDLE,
+            contentDescription = "银小叶公园向导",
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 8.dp, bottom = 74.dp)
+                .size(188.dp)
+                .graphicsLayer {
+                    alpha = orbIn
+                    translationY = sin(drift * 2f * PI.toFloat()) * 7f
+                    rotationZ = sin(drift * 2f * PI.toFloat()) * 1.2f
+                },
+        )
+
         // 顶部：地点与参与者标识，最先落位，先给出「你在哪里」。
         Column(
             Modifier
@@ -337,29 +361,20 @@ fun WelcomeScreen(
                     .graphicsLayer { alpha = orbIn },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Canvas(Modifier.size(38.dp)) {
-                    val center = Offset(size.width / 2f, size.height / 2f)
-                    drawCircle(SageMist.copy(alpha = .22f + shimmer * .18f), size.minDimension * .5f * (.86f + shimmer * .14f), center)
-                    drawCircle(SageMist.copy(alpha = .70f), size.minDimension * .30f, center)
-                    repeat(3) { index ->
-                        val angle = (index / 3f + shimmer * .12f) * 2f * PI.toFloat()
-                        val r = size.minDimension * .40f
-                        drawCircle(
-                            Color.White.copy(alpha = .55f),
-                            1.8.dp.toPx(),
-                            Offset(center.x + cos(angle) * r, center.y + sin(angle) * r),
-                        )
-                    }
-                }
+                AnimatedMascot(
+                    mood = MascotMood.IDLE,
+                    contentDescription = "银小叶正在招呼你",
+                    modifier = Modifier.size(48.dp),
+                )
                 Column(Modifier.padding(start = 12.dp)) {
-                    Text("SAGE 已经在你身边", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    Text("它会告诉你自己在听、在看、在想什么", color = Color.White.copy(alpha = .68f), fontSize = 11.sp)
+                    Text("银小叶已经在你身边", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("它会陪你看路线、找方向、记录发现", color = Color.White.copy(alpha = .68f), fontSize = 11.sp)
                 }
             }
 
             Button(
                 onClick = onEnter,
-                shape = RoundedCornerShape(18.dp),
+                shape = sageBubbleShape(1),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 22.dp)
@@ -381,10 +396,9 @@ fun WelcomeScreen(
  */
 @Composable
 fun ParkBriefCard(modifier: Modifier = Modifier) {
-    Surface(
-        color = Color.White.copy(alpha = .95f),
-        shape = RoundedCornerShape(20.dp),
-        shadowElevation = 8.dp,
+    FrostedGlassSurface(
+        tint = Color(0xFFEAF5D9),
+        shape = sageBubbleShape(0),
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp)) {

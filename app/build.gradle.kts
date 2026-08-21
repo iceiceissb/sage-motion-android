@@ -1,9 +1,26 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.android.compose.screenshot")
 }
+
+val sageLocalProperties = Properties().apply {
+    val propertiesFile = rootProject.file("local.properties")
+    if (propertiesFile.isFile) propertiesFile.inputStream().use(::load)
+}
+
+fun sageConfigValue(name: String): String =
+    providers.environmentVariable(name).orNull
+        ?: sageLocalProperties.getProperty(name, "")
+
+fun quotedBuildConfig(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+val amapApiKey = sageConfigValue("AMAP_API_KEY")
+val amapStyleId = sageConfigValue("AMAP_STYLE_ID")
 
 android {
     namespace = "cn.tsinghua.sagemotion"
@@ -13,8 +30,16 @@ android {
         applicationId = "cn.tsinghua.sagemotion"
         minSdk = 26
         targetSdk = 35
-        versionCode = 16
-        versionName = "1.6.0-pretest"
+        versionCode = 21
+        versionName = "1.11.0-art-ui"
+
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
+
+        manifestPlaceholders["AMAP_API_KEY"] = amapApiKey
+        buildConfigField("boolean", "AMAP_API_KEY_CONFIGURED", amapApiKey.isNotBlank().toString())
+        buildConfigField("String", "AMAP_STYLE_ID", quotedBuildConfig(amapStyleId))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -57,6 +82,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.compose.ui:ui")
@@ -69,6 +95,7 @@ dependencies {
     implementation("com.google.mlkit:image-labeling:17.0.9")
     implementation("net.java.dev.jna:jna:5.18.1@aar")
     implementation("com.alphacephei:vosk-android:0.3.75@aar")
+    implementation("com.amap.api:3dmap-location-search:10.1.200_loc6.4.9_sea9.7.4")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

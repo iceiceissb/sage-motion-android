@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -105,7 +106,8 @@ fun ScrapbookJournal(
     selectedIndex: Int = -1,
     onMomentSelected: (Int) -> Unit = {},
 ) {
-    var entered by remember { mutableStateOf(false) }
+    val inspection = LocalInspectionMode.current
+    var entered by remember { mutableStateOf(inspection) }
     LaunchedEffect(Unit) { entered = true }
     val reveal by animateFloatAsState(
         targetValue = if (entered) 1f else 0f,
@@ -187,6 +189,29 @@ private fun ScrapbookHeader(stats: JourneyStats, reveal: Float) {
             translationY = (1f - headerIn) * -14f
         },
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(color = SageGreenDark, shape = RoundedCornerShape(100.dp)) {
+                Text(
+                    "拾景纸刊",
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                )
+            }
+            Text(
+                "真实照片为锚 · 路线与发现成页",
+                color = SageMuted,
+                fontSize = 9.sp,
+                modifier = Modifier.padding(start = 7.dp).weight(1f),
+            )
+            AnimatedMascot(
+                mood = MascotMood.CELEBRATING,
+                animate = false,
+                contentDescription = "银小叶知识游记贴纸",
+                modifier = Modifier.size(32.dp),
+            )
+        }
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 stats.routeName,

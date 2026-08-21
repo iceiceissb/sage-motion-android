@@ -2,6 +2,9 @@ package cn.tsinghua.sagemotion.ui.screens
 
 import android.net.Uri
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
+import android.os.Handler
+import android.os.Looper
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -69,6 +72,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -110,6 +114,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalDensity
@@ -130,14 +135,19 @@ import cn.tsinghua.sagemotion.model.ExperimentUiState
 import cn.tsinghua.sagemotion.model.RouteChoice
 import cn.tsinghua.sagemotion.model.VisionFinding
 import cn.tsinghua.sagemotion.model.JourneyPhotoMoment
+import cn.tsinghua.sagemotion.model.ParkRoute
 import cn.tsinghua.sagemotion.ui.components.BreathingVoiceOrb
-import cn.tsinghua.sagemotion.ui.components.AdaptiveRouteMotion
-import cn.tsinghua.sagemotion.ui.components.AdoptedRouteMotion
+import cn.tsinghua.sagemotion.ui.components.AmapParkMap
+import cn.tsinghua.sagemotion.ui.components.AnimatedMascot
+import cn.tsinghua.sagemotion.ui.components.BubbleChoice
+import cn.tsinghua.sagemotion.ui.components.FrostedGlassSurface
+import cn.tsinghua.sagemotion.ui.components.MascotMood
 import cn.tsinghua.sagemotion.ui.components.MemoryWeaveMotion
-import cn.tsinghua.sagemotion.ui.components.ExplorationAmbientMotion
-import cn.tsinghua.sagemotion.ui.components.RouteSemanticMotion
+import cn.tsinghua.sagemotion.ui.components.JourneyStats
+import cn.tsinghua.sagemotion.ui.components.ScrapbookJournal
 import cn.tsinghua.sagemotion.ui.components.VisualSemanticMotion
 import cn.tsinghua.sagemotion.ui.components.VoiceSemanticField
+import cn.tsinghua.sagemotion.ui.components.sageBubbleShape
 import cn.tsinghua.sagemotion.ui.theme.SageDivider
 import cn.tsinghua.sagemotion.ui.theme.SageGreen
 import cn.tsinghua.sagemotion.ui.theme.SageGreenDark
@@ -314,13 +324,13 @@ fun ExperimentScreen(
     if (showExitDialog) {
         AlertDialog(
             onDismissRequest = { showExitDialog = false },
-            title = { Text("结束当前会话？") },
-            text = { Text("实验数据已经实时保存。结束后可以在历史数据中查看和导出；也可以继续当前流程。") },
+            title = { Text("结束今天的探索？") },
+            text = { Text("旅程记录已经实时保存在本机。结束后可以在历史记录中查看和导出，也可以继续逛一会儿。") },
             confirmButton = {
                 TextButton(onClick = { showExitDialog = false; onFinishSession() }) { Text("保存并结束") }
             },
             dismissButton = {
-                TextButton(onClick = { showExitDialog = false }) { Text("继续实验") }
+                TextButton(onClick = { showExitDialog = false }) { Text("继续探索") }
             },
         )
     }
@@ -335,67 +345,73 @@ private fun ExplorationHub(
     onFinish: () -> Unit,
     onResearcherPanel: () -> Unit,
 ) {
+    val density = LocalDensity.current
+    var consoleHeightPx by remember(density) {
+        mutableIntStateOf(with(density) { 190.dp.roundToPx() })
+    }
+    val consoleHeight = with(density) { consoleHeightPx.toDp() }
+
     Box(Modifier.fillMaxSize().background(Color(0xFFE5E8E2))) {
-        Image(painterResource(R.drawable.park_map_background), "当前路线地图", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        AmapParkMap(
+            contentDescription = "当前路线地图",
+            modifier = Modifier.fillMaxSize(),
+            selectedAlternative = state.adoptedRoute == RouteChoice.ALTERNATIVE,
+            guidanceControls = true,
+            guidanceBottomInset = consoleHeight,
+        )
         Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .18f)))
-        if (state.routeReplanned) {
-            AdaptiveRouteMotion(AiStage.COMPLETE, state.condition)
-        } else {
-            AdoptedRouteMotion(state.adoptedRoute, state.condition)
-        }
-        ExplorationAmbientMotion(state.capturedPhotoUris.size, state.voiceInteractionCount, state.replanCount)
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {
             AiStatusPanel(state, onResearcherPanel) {}
             Surface(
                 color = SageGreenDark.copy(alpha = .94f),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.padding(top = 10.dp),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.padding(top = 8.dp),
             ) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(9.dp).background(Color(0xFF9DE0B6), CircleShape))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AnimatedMascot(
+                        mood = MascotMood.NAVIGATING,
+                        contentDescription = "银小叶正在陪伴探索",
+                        modifier = Modifier.size(30.dp),
+                    )
                     Text(
                         "${state.activeRouteName}进行中",
                         color = Color.White,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 9.dp).weight(1f),
+                        modifier = Modifier.padding(start = 6.dp).weight(1f),
                     )
-                    Text("可随时调用工具", color = Color.White.copy(alpha = .72f), fontSize = 11.sp)
+                    Text("探索中", color = Color.White.copy(alpha = .72f), fontSize = 10.sp)
                 }
             }
         }
-        Surface(
-            color = Color.White.copy(alpha = .97f),
-            shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-            shadowElevation = 14.dp,
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+        FrostedGlassSurface(
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .onSizeChanged { consoleHeightPx = it.height },
         ) {
-            Column(Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 17.dp)) {
+            Column(Modifier.navigationBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val toolUseCount = state.visualInteractionCount + state.voiceInteractionCount + state.replanCount
-                    Column(Modifier.weight(1f)) {
-                        Text("探索工作台", color = SageInk, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                        Text("功能可以重复使用，不会强制按顺序推进", color = SageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
-                    }
+                    val photoCount = state.capturedPhotoUris.size
+                    Text("和银小叶一起发现", color = SageInk, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     Surface(color = SageMist, shape = RoundedCornerShape(12.dp)) {
-                        Text("$toolUseCount 次工具调用", color = SageGreenDark, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
+                        Text(
+                            if (photoCount > 0) "$toolUseCount 次调用 · $photoCount 张照片" else "$toolUseCount 次调用",
+                            color = SageGreenDark,
+                            fontSize = 10.sp,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        )
                     }
                 }
-                if (state.capturedPhotoUris.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        state.capturedPhotoUris.takeLast(3).forEach { uri -> PhotoThumbnail(uri, Modifier.padding(end = 7.dp)) }
-                        Column(Modifier.padding(start = 2.dp)) {
-                            Text("旅程照片 ${state.capturedPhotoUris.size} 张", color = SageInk, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                            Text("结束时会进入知识游记", color = SageMuted, fontSize = 10.sp)
-                        }
-                    }
+                Row(Modifier.fillMaxWidth().padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    HubActionCard(HubTaskKind.PHOTO, "拍照圈搜", "${state.visualInteractionCount} 次", SageGreen, onPhoto, Modifier.weight(1f).height(72.dp))
+                    HubActionCard(HubTaskKind.VOICE, "语音对话", "${state.voiceInteractionCount} 次", Color(0xFF4E718B), onVoice, Modifier.weight(1f).height(72.dp))
+                    HubActionCard(HubTaskKind.REPLAN, "重新规划", "${state.replanCount} 次", SageOchre, onReplan, Modifier.weight(1f).height(72.dp))
                 }
-                Row(Modifier.fillMaxWidth().padding(top = 13.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HubActionCard(HubTaskKind.PHOTO, "拍照圈搜", "圈出画面再问", "${state.visualInteractionCount} 次", SageGreen, onPhoto, Modifier.weight(1f))
-                    HubActionCard(HubTaskKind.VOICE, "语音对话", "边走边说", "${state.voiceInteractionCount} 次", Color(0xFF4E718B), onVoice, Modifier.weight(1f))
-                    HubActionCard(HubTaskKind.REPLAN, "重新规划", "变化随时响应", "${state.replanCount} 次", SageOchre, onReplan, Modifier.weight(1f))
-                }
-                Button(onClick = onFinish, modifier = Modifier.fillMaxWidth().padding(top = 13.dp).height(53.dp), shape = RoundedCornerShape(17.dp)) {
-                    Icon(Icons.Default.AutoAwesome, null, Modifier.size(19.dp)); Spacer(Modifier.width(8.dp)); Text("结束探索并生成知识游记", fontSize = 15.sp, color = Color.White)
+                Button(onClick = onFinish, modifier = Modifier.fillMaxWidth().padding(top = 9.dp).height(44.dp), shape = RoundedCornerShape(15.dp)) {
+                    Icon(Icons.Default.AutoAwesome, null, Modifier.size(17.dp)); Spacer(Modifier.width(7.dp)); Text("结束探索并生成知识游记", fontSize = 13.sp, color = Color.White)
                 }
             }
         }
@@ -406,7 +422,6 @@ private fun ExplorationHub(
 private fun HubActionCard(
     kind: HubTaskKind,
     title: String,
-    subtitle: String,
     detail: String,
     accent: Color,
     onClick: () -> Unit,
@@ -420,24 +435,36 @@ private fun HubActionCard(
         label = "hubActionPress",
     )
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = .16f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = when (kind) {
+                HubTaskKind.PHOTO -> Color(0xFFEAF5D9).copy(alpha = .90f)
+                HubTaskKind.VOICE -> Color(0xFFE8F0F7).copy(alpha = .90f)
+                HubTaskKind.REPLAN -> Color(0xFFFFEBD9).copy(alpha = .90f)
+            },
+        ),
+        shape = sageBubbleShape(kind.ordinal),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .92f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         modifier = modifier
             .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 11.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                HubTaskGlyph(kind, accent)
+                AnimatedMascot(
+                    mood = when (kind) {
+                        HubTaskKind.PHOTO -> MascotMood.DISCOVERING
+                        HubTaskKind.VOICE -> MascotMood.LISTENING
+                        HubTaskKind.REPLAN -> MascotMood.NAVIGATING
+                    },
+                    modifier = Modifier.size(33.dp),
+                )
                 Spacer(Modifier.weight(1f))
                 Surface(color = accent.copy(alpha = .12f), shape = RoundedCornerShape(100.dp)) {
-                    Text(detail, color = accent, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
+                    Text(detail, color = accent, fontSize = 8.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
                 }
             }
-            Text(title, color = SageInk, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), maxLines = 1)
-            Text(subtitle, color = SageMuted, fontSize = 9.sp, modifier = Modifier.fillMaxWidth().padding(top = 3.dp), maxLines = 1)
+            Text(title, color = SageInk, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth(), maxLines = 1)
         }
     }
 }
@@ -447,7 +474,7 @@ private enum class HubTaskKind { PHOTO, VOICE, REPLAN }
 /** 简洁线性图标：不使用大色块、外圈或装饰弧，避免在浅色地图上形成灰边。 */
 @Composable
 private fun HubTaskGlyph(kind: HubTaskKind, accent: Color) {
-    Canvas(Modifier.size(32.dp).padding(3.dp)) {
+    Canvas(Modifier.size(26.dp).padding(2.dp)) {
         val stroke = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
         when (kind) {
             HubTaskKind.PHOTO -> {
@@ -538,17 +565,14 @@ private fun RouteExperiment(
         rememberRealSpeechInputState(state.routeConstraintText, onConstraintChanged)
     }
     Box(Modifier.fillMaxSize().background(Color(0xFFE6E7E0))) {
-        Image(
-            painter = painterResource(R.drawable.park_map_background),
+        AmapParkMap(
             contentDescription = "公园地图",
-            contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
+            selectedAlternative = state.selectedRoute == RouteChoice.ALTERNATIVE,
+            routeEnabled = state.isRunning || state.resultVisible,
+            showRouteSummary = state.isRunning || state.resultVisible,
         )
         Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.20f)))
-
-        if (state.isRunning || state.resultVisible) {
-            RouteSemanticMotion(stage = state.aiStage, condition = state.condition)
-        }
 
         Column(
             modifier = Modifier
@@ -623,6 +647,15 @@ private fun routePreferenceSummary(ids: Set<String>): String = listOf(
     "quiet" to "少人安静",
 ).filter { it.first in ids }.joinToString("、") { it.second }.ifBlank { "舒适易行" }
 
+private fun mascotMoodFor(state: ExperimentUiState): MascotMood = when {
+    state.aiStage == AiStage.COMPLETE || state.scenario == ExperimentScenario.CREATE -> MascotMood.CELEBRATING
+    state.aiStage == AiStage.LISTENING || state.scenario == ExperimentScenario.VOICE -> MascotMood.LISTENING
+    state.aiStage == AiStage.RECOGNIZING || state.scenario == ExperimentScenario.VISUAL -> MascotMood.DISCOVERING
+    state.aiStage in setOf(AiStage.LOCATING, AiStage.REPLANNING, AiStage.DECIDING) ||
+        state.scenario in setOf(ExperimentScenario.ENVIRONMENT, ExperimentScenario.EXPLORE, ExperimentScenario.ADJUST) -> MascotMood.NAVIGATING
+    else -> MascotMood.IDLE
+}
+
 @Composable
 private fun RouteConstraintCard(
     text: String,
@@ -633,38 +666,45 @@ private fun RouteConstraintCard(
     onRun: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        color = Color.White.copy(alpha = .98f),
-        shadowElevation = 16.dp,
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 17.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(color = SageMist, shape = CircleShape) {
-                    Icon(Icons.AutoMirrored.Filled.AltRoute, null, tint = SageGreenDark, modifier = Modifier.padding(9.dp).size(20.dp))
-                }
+                AnimatedMascot(
+                    mood = MascotMood.NAVIGATING,
+                    contentDescription = "银小叶准备规划路线",
+                    modifier = Modifier.size(46.dp),
+                )
                 Column(Modifier.padding(start = 11.dp).weight(1f)) {
                     Text("先约束，再推荐", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text("选择偏好，也可以直接说出今天的需求", color = SageMuted, fontSize = 11.sp)
                 }
                 Surface(color = SageGreen.copy(alpha = .10f), shape = RoundedCornerShape(9.dp)) {
-                    Text("输入阶段", color = SageGreenDark, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
+                    Text("告诉银小叶", color = SageGreenDark, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
                 }
             }
             listOf(
-                listOf("shade" to "阴凉优先", "rest" to "沿途有座椅"),
-                listOf("short" to "路程更短", "quiet" to "避开人群"),
-            ).forEach { row ->
+                listOf(Triple("shade", "阴凉优先", Color(0xFFEAF5D7)), Triple("rest", "沿途有座椅", Color(0xFFFFE9D9))),
+                listOf(Triple("short", "路程更短", Color(0xFFE3F0F4)), Triple("quiet", "避开人群", Color(0xFFECE7F4))),
+            ).forEachIndexed { rowIndex, row ->
                 Row(Modifier.fillMaxWidth().padding(top = 7.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { (id, label) ->
-                        FilterChip(
+                    row.forEachIndexed { columnIndex, (id, label, tint) ->
+                        BubbleChoice(
                             selected = id in selectedIds,
                             onClick = { onPreferenceToggled(id) },
-                            label = { Text(label, maxLines = 1, fontSize = 11.sp) },
-                            leadingIcon = if (id in selectedIds) {{ Icon(Icons.Default.Check, null, Modifier.size(15.dp)) }} else null,
+                            variant = rowIndex * 2 + columnIndex,
+                            tint = tint,
                             modifier = Modifier.weight(1f),
-                        )
+                        ) {
+                            if (id in selectedIds) {
+                                Icon(Icons.Default.Check, null, Modifier.size(15.dp))
+                            } else {
+                                Box(Modifier.size(8.dp).background(SageGreen.copy(alpha = .28f), CircleShape))
+                            }
+                            Text(label, maxLines = 1, fontSize = 11.sp, modifier = Modifier.padding(start = 7.dp))
+                        }
                     }
                 }
             }
@@ -674,6 +714,7 @@ private fun RouteConstraintCard(
                     onValueChange = onTextChanged,
                     modifier = Modifier.weight(1f),
                     singleLine = true,
+                    shape = sageBubbleShape(2),
                     label = { Text("补充一句，例如：不要台阶") },
                 )
                 IconButton(
@@ -691,7 +732,7 @@ private fun RouteConstraintCard(
                 onClick = onRun,
                 enabled = !speech.isListening,
                 modifier = Modifier.fillMaxWidth().padding(top = 9.dp).height(52.dp),
-                shape = RoundedCornerShape(17.dp),
+                shape = sageBubbleShape(1),
             ) {
                 Text(if (text.isBlank()) "按这些偏好推荐合适路线" else "确认约束并推荐路线", fontSize = 15.sp, color = Color.White)
             }
@@ -708,31 +749,19 @@ private fun AiStatusPanel(
 ) {
     val semantic = state.condition != ExperimentCondition.BASELINE
     val full = state.condition == ExperimentCondition.SAGE_FULL
-    Surface(
-        color = Color.White.copy(alpha = .94f),
+    FrostedGlassSurface(
         shape = RoundedCornerShape(22.dp),
-        tonalElevation = 1.dp,
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = {}, onLongClick = onLongPress),
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 13.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (state.isRunning) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.5.dp,
-                        color = if (full && state.aiStage == AiStage.UNCERTAIN) SageOchre else SageGreen,
-                    )
-                } else {
-                    Icon(
-                        imageVector = if (state.aiStage == AiStage.COMPLETE) Icons.Default.Check else Icons.Default.LocationOn,
-                        contentDescription = null,
-                        tint = SageGreen,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
+                AnimatedMascot(
+                    mood = mascotMoodFor(state),
+                    modifier = Modifier.size(36.dp),
+                )
+                Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     AnimatedContent(
                         targetState = statusTitle(state, semantic),
@@ -750,7 +779,7 @@ private fun AiStatusPanel(
                 if (!state.isRunning) {
                     Surface(color = SageMist, shape = RoundedCornerShape(10.dp)) {
                         Text(
-                            text = "体验 ${state.scenarioProgress}",
+                            text = "旅程 ${state.scenarioProgress}",
                             color = SageGreenDark,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
@@ -989,10 +1018,8 @@ private fun RouteResultPanel(
     onReset: () -> Unit,
 ) {
     val full = condition == ExperimentCondition.SAGE_FULL
-    Surface(
+    FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        color = Color.White,
-        shadowElevation = 12.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp)) {
@@ -1598,14 +1625,35 @@ private fun VoiceExperiment(
     val inspection = LocalInspectionMode.current
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
     var ttsReady by remember { mutableStateOf(false) }
+    var isSpeaking by remember { mutableStateOf(false) }
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
     DisposableEffect(context, inspection) {
         if (inspection) return@DisposableEffect onDispose { }
         val engine = TextToSpeech(context) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
             if (ttsReady) tts?.language = Locale.SIMPLIFIED_CHINESE
         }
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {
+                mainHandler.post { isSpeaking = true }
+            }
+
+            override fun onDone(utteranceId: String?) {
+                mainHandler.post { isSpeaking = false }
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) {
+                mainHandler.post { isSpeaking = false }
+            }
+        })
         tts = engine
-        onDispose { engine.stop(); engine.shutdown(); tts = null }
+        onDispose {
+            engine.stop()
+            engine.shutdown()
+            tts = null
+            isSpeaking = false
+        }
     }
     val speechInput = if (inspection) {
         remember { SpeechInputState("预览模式 · 轻触后直接在应用内说话", false, .38f) {} }
@@ -1613,7 +1661,11 @@ private fun VoiceExperiment(
         rememberRealSpeechInputState(state.voiceTranscript, onVoiceTranscript)
     }
     Box(Modifier.fillMaxSize().background(Color(0xFFE8ECE8))) {
-        Image(painterResource(R.drawable.park_map_background), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = .48f)
+        AmapParkMap(
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = .48f },
+            gesturesEnabled = false,
+        )
         Box(Modifier.fillMaxSize().background(Color(0xFFDCE6E0).copy(alpha = .54f)))
         if (state.isRunning || state.resultVisible || speechInput.isListening) {
             VoiceSemanticField(stage = if (speechInput.isListening) AiStage.LISTENING else state.aiStage, condition = state.condition, inputLevel = speechInput.level)
@@ -1677,7 +1729,18 @@ private fun VoiceExperiment(
                     onPrimary = onAdopt,
                     onEvidence = if (state.condition == ExperimentCondition.SAGE_FULL) onEvidence else null,
                     onReset = onReset,
-                    onSpeak = { result.summary.let { tts?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "sage_replay") } },
+                    isSpeaking = isSpeaking,
+                    onSpeak = if (ttsReady) {
+                        {
+                            if (isSpeaking) {
+                                tts?.stop()
+                                isSpeaking = false
+                            } else {
+                                val status = tts?.speak(result.summary, TextToSpeech.QUEUE_FLUSH, null, "sage_replay")
+                                if (status == TextToSpeech.ERROR) isSpeaking = false
+                            }
+                        }
+                    } else null,
                 )
             }
         }
@@ -1847,7 +1910,11 @@ private fun JourneyRoutePreview(
         label = "journeyRouteReveal",
     )
     Box(modifier.clip(RoundedCornerShape(18.dp)).background(Color(0xFFE8EEE9))) {
-        Image(painterResource(R.drawable.park_map_background), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = .28f)
+        AmapParkMap(
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = .28f },
+            gesturesEnabled = false,
+        )
         Canvas(Modifier.fillMaxSize()) {
             val fullPath = Path().apply {
                 moveTo(size.width * .05f, size.height * .78f)
@@ -1906,6 +1973,7 @@ private fun JourneyRoutePanel(
     onShare: () -> Unit,
 ) {
     var selectedIndex by rememberSaveable(moments.size) { mutableIntStateOf(0) }
+    var zineMode by rememberSaveable { mutableStateOf(true) }
     LaunchedEffect(moments.size) {
         selectedIndex = selectedIndex.coerceIn(0, (moments.lastIndex).coerceAtLeast(0))
     }
@@ -1923,28 +1991,68 @@ private fun JourneyRoutePanel(
                 .padding(horizontal = 18.dp, vertical = 16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(color = SageMist, shape = CircleShape) {
-                    Icon(Icons.Default.LocationOn, null, tint = SageGreenDark, modifier = Modifier.padding(9.dp).size(21.dp))
-                }
+                AnimatedMascot(
+                    mood = MascotMood.CELEBRATING,
+                    contentDescription = "银小叶展示知识游记",
+                    modifier = Modifier.size(48.dp),
+                )
                 Column(Modifier.padding(start = 10.dp).weight(1f)) {
-                    Text("今天走过的知识路线", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                    Text("点击沿线照片，回看当时的问题与回答", color = SageMuted, fontSize = 11.sp)
+                    Text(if (zineMode) "今天的拾景纸刊" else "今天走过的知识路线", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (zineMode) "真实照片为锚，把路线与发现重新装订" else "点击沿线照片，回看当时的问题与回答", color = SageMuted, fontSize = 11.sp)
                 }
                 IconButton(onClick = onShare, modifier = Modifier.background(SageMist, CircleShape)) {
                     Icon(Icons.Default.Share, "分享知识游记", tint = SageGreenDark)
                 }
             }
-            JourneyRouteMap(
-                moments = moments,
-                voiceCount = voiceCount,
-                replanCount = replanCount,
-                routeReplanned = routeReplanned,
-                adoptedRoute = adoptedRoute,
-                selectedIndex = selectedIndex,
-                onSelected = { selectedIndex = it },
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(265.dp),
-            )
-            if (voiceCount > 0 || replanCount > 0) {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                BubbleChoice(
+                    selected = zineMode,
+                    onClick = { zineMode = true },
+                    variant = 0,
+                    tint = Color(0xFFF1EDDA),
+                    modifier = Modifier.weight(1f),
+                ) { Text("拾景纸刊", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                BubbleChoice(
+                    selected = !zineMode,
+                    onClick = { zineMode = false },
+                    variant = 1,
+                    tint = Color(0xFFE4EFE8),
+                    modifier = Modifier.weight(1f),
+                ) { Text("路线地图", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+            }
+            if (zineMode) {
+                ScrapbookJournal(
+                    moments = moments,
+                    landmarks = ParkRoute.LANDMARKS,
+                    stats = JourneyStats(
+                        routeName = ParkRoute.NAME,
+                        totalMinutes = ParkRoute.TOTAL_MINUTES,
+                        distanceMeters = ParkRoute.TOTAL_DISTANCE_METERS,
+                        photoCount = moments.size,
+                        questionCount = moments.sumOf { it.questions.size },
+                        voiceCount = voiceCount,
+                        replanCount = replanCount,
+                        dateLabel = "八家郊野公园 · 南园",
+                    ),
+                    selectedIndex = selectedIndex,
+                    onMomentSelected = { selectedIndex = it },
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                )
+            } else {
+                JourneyRouteMap(
+                    moments = moments,
+                    voiceCount = voiceCount,
+                    replanCount = replanCount,
+                    routeReplanned = routeReplanned,
+                    adoptedRoute = adoptedRoute,
+                    selectedIndex = selectedIndex,
+                    onSelected = { selectedIndex = it },
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(265.dp),
+                )
+                if (voiceCount > 0 || replanCount > 0) {
                 Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (voiceCount > 0) {
                         JourneyMaterialSummary(
@@ -1965,8 +2073,8 @@ private fun JourneyRoutePanel(
                         )
                     }
                 }
-            }
-            if (moments.isNotEmpty()) {
+                }
+                if (moments.isNotEmpty()) {
                 AnimatedContent(
                     targetState = selectedIndex,
                     transitionSpec = {
@@ -1978,9 +2086,10 @@ private fun JourneyRoutePanel(
                 ) { index ->
                     JourneyMomentDetail(moments[index.coerceIn(moments.indices)], index + 1, moments.size)
                 }
-            } else {
+                } else {
                 Surface(color = Color(0xFFF4F6F3), shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth().padding(top = 11.dp)) {
                     Text("这次旅程还没有照片节点。下次可在探索途中拍照圈搜，照片和问题会自动落到路线上。", color = SageMuted, fontSize = 12.sp, lineHeight = 18.sp, modifier = Modifier.padding(14.dp))
+                }
                 }
             }
             if (showUncertainty && result.uncertainty != null) {
@@ -2033,7 +2142,12 @@ private fun JourneyRouteMap(
         label = "selectedJourneyNodePulse",
     )
     Box(modifier.clip(RoundedCornerShape(21.dp)).background(Color(0xFFE4ECE6))) {
-        Image(painterResource(R.drawable.park_map_background), "本次步行路线图", Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alpha = .52f)
+        AmapParkMap(
+            contentDescription = "本次步行路线图",
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = .52f },
+            selectedAlternative = adoptedRoute == RouteChoice.ALTERNATIVE,
+            gesturesEnabled = false,
+        )
         Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .18f)))
         Canvas(Modifier.fillMaxSize()) {
             val fullPath = journeyRoutePath(size, routeReplanned, adoptedRoute)
@@ -2300,9 +2414,13 @@ private fun AdjustExperiment(
         rememberRealSpeechInputState(state.replanRequestText, onRequestChanged)
     }
     Box(Modifier.fillMaxSize().background(Color(0xFFE5E8E2))) {
-        Image(painterResource(R.drawable.park_map_background), "动态路线地图", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        AmapParkMap(
+            contentDescription = "动态路线地图",
+            modifier = Modifier.fillMaxSize(),
+            selectedAlternative = state.selectedRoute == RouteChoice.ALTERNATIVE,
+            showRouteSummary = state.isRunning || state.resultVisible,
+        )
         Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .25f)))
-        if (state.isRunning || state.resultVisible) AdaptiveRouteMotion(state.aiStage, state.condition)
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {
             FunctionHeader(state, onBack, onResearcherPanel, onCancel)
             if (state.isRunning || state.resultVisible) {
@@ -2383,7 +2501,7 @@ private fun ReplanInputCard(
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp)) {
             Text("发生了什么变化？", fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = SageInk)
-            Text("可以说话、手动输入，或使用下面的实验示例。", color = SageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
+                Text("可以说话、手动输入，或轻触下面的示例。", color = SageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
             FilterChip(
                 selected = request == suggested,
                 onClick = { onRequestChanged(suggested) },
@@ -2460,6 +2578,7 @@ private fun ResultPanel(
     onEvidence: (() -> Unit)?,
     onReset: () -> Unit,
     onSpeak: (() -> Unit)? = null,
+    isSpeaking: Boolean = false,
     onShare: (() -> Unit)? = null,
     photoUris: List<String> = emptyList(),
 ) {
@@ -2495,7 +2614,15 @@ private fun ResultPanel(
                 Text(result.primaryAction, fontSize = 16.sp, color = Color.White)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                if (onSpeak != null) TextButton(onClick = onSpeak) { Icon(Icons.AutoMirrored.Filled.VolumeUp, null, Modifier.size(17.dp)); Spacer(Modifier.width(5.dp)); Text("播放语音") }
+                if (onSpeak != null) TextButton(onClick = onSpeak) {
+                    Icon(
+                        if (isSpeaking) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                        null,
+                        Modifier.size(17.dp),
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (isSpeaking) "关闭语音" else "播放语音")
+                }
                 if (onShare != null) TextButton(onClick = onShare) { Icon(Icons.Default.Share, null, Modifier.size(17.dp)); Spacer(Modifier.width(5.dp)); Text("分享") }
                 if (onEvidence != null) TextButton(onClick = onEvidence) { Text("查看依据") }
                 TextButton(onClick = onReset) { Text("重新开始") }
@@ -2569,14 +2696,14 @@ private fun DemoCompleteScreen(
             )
         }
         Spacer(Modifier.weight(1f))
-        Box(
-            Modifier.size(88.dp).background(SageGreen, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(44.dp))
-        }
+        Image(
+            painter = painterResource(R.drawable.ip_ginkgo_guide),
+            contentDescription = "银小叶庆祝体验完成",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(148.dp),
+        )
         Text(
-            "完整体验已完成",
+            "银小叶陪你完成了探索",
             color = SageInk,
             fontSize = 26.sp,
             fontWeight = FontWeight.SemiBold,

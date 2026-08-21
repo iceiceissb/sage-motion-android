@@ -16,7 +16,36 @@ import cn.tsinghua.sagemotion.model.RouteChoice
 import cn.tsinghua.sagemotion.ui.screens.ExperimentScreen
 import cn.tsinghua.sagemotion.ui.screens.HistoryScreen
 import cn.tsinghua.sagemotion.ui.screens.PostTaskSurveyScreen
+import cn.tsinghua.sagemotion.ui.screens.WelcomeScreen
 import cn.tsinghua.sagemotion.ui.theme.SageMotionTheme
+
+@Preview(name = "Welcome with IP", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+fun WelcomeWithIpScreenshot() {
+    SageMotionTheme {
+        WelcomeScreen(participantId = "P001", onEnter = {})
+    }
+}
+
+@Preview(name = "Demo Complete with IP", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+fun DemoCompleteWithIpScreenshot() {
+    SageMotionTheme {
+        ExperimentScreen(
+            state = ExperimentUiState(
+                sessionStarted = true,
+                participantId = "P001",
+                demoCompleted = true,
+            ),
+            onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
+            onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
+            onRouteSelected = {}, onScenarioSelected = {}, onConditionSelected = {}, onNextCondition = {},
+            onPreviewPrevious = {}, onPreviewNext = {}, onResearcherPanel = {}, onHistory = {},
+            onExport = {}, onExportAll = {}, onVoiceTranscript = {},
+            onCreatePhotoUri = { android.net.Uri.EMPTY }, onPhotoCaptured = {}, onShareJourney = {}, onBeginJourneySummary = {},
+        )
+    }
+}
 
 @Preview(name = "Post-task Survey", widthDp = 390, heightDp = 844, showBackground = true)
 @Composable
