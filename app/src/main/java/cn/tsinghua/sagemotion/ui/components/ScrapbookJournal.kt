@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -118,22 +119,20 @@ fun ScrapbookJournal(
 
     Surface(
         color = SagePaper,
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(18.dp),
         modifier = modifier,
     ) {
         Box {
             PaperTexture(Modifier.matchParentSize())
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
-                ScrapbookHeader(stats, reveal)
+            Column(Modifier.padding(8.dp)) {
                 GatheredScenesField(
                     moments = moments,
                     landmarks = landmarks,
                     reveal = reveal,
                     selectedIndex = selectedIndex,
                     onMomentSelected = onMomentSelected,
-                    modifier = Modifier.fillMaxWidth().padding(top = 14.dp),
+                    modifier = Modifier.fillMaxWidth().aspectRatio(3f / 5f),
                 )
-                ScrapbookFooter(stats, reveal, Modifier.padding(top = 14.dp))
             }
         }
     }
@@ -250,38 +249,9 @@ private fun GatheredScenesField(
 ) {
     val activeIndex = selectedIndex.coerceIn(0, moments.lastIndex.coerceAtLeast(0))
     val moment = moments.getOrNull(activeIndex)
-    val landmark = landmarks.getOrNull(
-        if (landmarks.isEmpty()) 0
-        else ((activeIndex + 1) * landmarks.lastIndex / moments.size.coerceAtLeast(1)).coerceIn(0, landmarks.lastIndex),
-    )
     val cobalt = Color(0xFF2857C5)
-    val tornShape = remember {
-        GenericShape { size, _ ->
-            moveTo(size.width * .03f, size.height * .05f)
-            lineTo(size.width * .18f, size.height * .015f)
-            lineTo(size.width * .37f, size.height * .04f)
-            lineTo(size.width * .58f, size.height * .012f)
-            lineTo(size.width * .78f, size.height * .045f)
-            lineTo(size.width * .97f, size.height * .02f)
-            lineTo(size.width * .985f, size.height * .22f)
-            lineTo(size.width * .96f, size.height * .43f)
-            lineTo(size.width * .99f, size.height * .66f)
-            lineTo(size.width * .955f, size.height * .94f)
-            lineTo(size.width * .78f, size.height * .98f)
-            lineTo(size.width * .61f, size.height * .955f)
-            lineTo(size.width * .42f, size.height * .99f)
-            lineTo(size.width * .23f, size.height * .96f)
-            lineTo(size.width * .02f, size.height * .985f)
-            lineTo(size.width * .04f, size.height * .75f)
-            lineTo(size.width * .012f, size.height * .53f)
-            lineTo(size.width * .045f, size.height * .31f)
-            close()
-        }
-    }
-
-    Box(
+    BoxWithConstraints(
         modifier
-            .height(430.dp)
             .clickable(
                 enabled = moments.size > 1,
                 indication = null,
@@ -289,92 +259,189 @@ private fun GatheredScenesField(
             ) { onMomentSelected((activeIndex + 1) % moments.size) },
     ) {
         Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = reveal }) {
-            // 宽阔的安静纸面里只保留一组简化叶形，避免逐叶描摹。
-            val leafMass = Path().apply {
-                moveTo(size.width * .57f, size.height * .10f)
-                cubicTo(size.width * .92f, size.height * .02f, size.width * 1.02f, size.height * .26f, size.width * .73f, size.height * .42f)
-                cubicTo(size.width * .92f, size.height * .44f, size.width * .99f, size.height * .67f, size.width * .64f, size.height * .70f)
-                cubicTo(size.width * .74f, size.height * .88f, size.width * .56f, size.height * .96f, size.width * .49f, size.height * .72f)
+            // 右侧只保留一个大尺度植物剪影。密集叶片被压缩成少数安静形体，
+            // 让真实照片和纸面留白成为主角。
+            val stem = Path().apply {
+                moveTo(size.width * .58f, size.height * .92f)
+                cubicTo(size.width * .67f, size.height * .72f, size.width * .63f, size.height * .48f, size.width * .76f, size.height * .24f)
+            }
+            drawPath(stem, Color(0xFF74794B), style = Stroke(15.dp.toPx(), cap = StrokeCap.Round))
+            listOf(
+                Triple(Offset(size.width * .55f, size.height * .72f), Size(size.width * .33f, size.height * .15f), -24f),
+                Triple(Offset(size.width * .70f, size.height * .55f), Size(size.width * .28f, size.height * .14f), 22f),
+                Triple(Offset(size.width * .52f, size.height * .42f), Size(size.width * .30f, size.height * .13f), -28f),
+                Triple(Offset(size.width * .73f, size.height * .32f), Size(size.width * .23f, size.height * .11f), 24f),
+            ).forEach { (center, leafSize, angle) ->
+                rotate(angle, center) {
+                    val leaf = Path().apply {
+                        moveTo(center.x - leafSize.width * .50f, center.y)
+                        cubicTo(
+                            center.x - leafSize.width * .12f,
+                            center.y - leafSize.height * .72f,
+                            center.x + leafSize.width * .28f,
+                            center.y - leafSize.height * .48f,
+                            center.x + leafSize.width * .50f,
+                            center.y,
+                        )
+                        cubicTo(
+                            center.x + leafSize.width * .18f,
+                            center.y + leafSize.height * .46f,
+                            center.x - leafSize.width * .20f,
+                            center.y + leafSize.height * .50f,
+                            center.x - leafSize.width * .50f,
+                            center.y,
+                        )
+                        close()
+                    }
+                    drawPath(leaf, Color(0xFF8A8D5C))
+                    drawLine(
+                        Color(0xFF74794B).copy(alpha = .58f),
+                        Offset(center.x - leafSize.width * .38f, center.y),
+                        Offset(center.x + leafSize.width * .42f, center.y),
+                        1.dp.toPx(),
+                    )
+                }
+            }
+            val flowerCenter = Offset(size.width * .76f, size.height * .20f)
+            repeat(5) { index ->
+                rotate(index * 72f, flowerCenter) {
+                    drawOval(
+                        Color(0xFFC96D83),
+                        topLeft = Offset(flowerCenter.x - size.width * .027f, flowerCenter.y - size.width * .10f),
+                        size = Size(size.width * .054f, size.width * .105f),
+                    )
+                }
+            }
+            drawCircle(Color(0xFFE8B49A), size.width * .026f, flowerCenter)
+
+            // 钴蓝色不是装饰线，而是一条跨过照片—纸面边界的宽结构通道。
+            val cobaltPassage = Path().apply {
+                moveTo(-size.width * .08f, size.height * .94f)
+                cubicTo(size.width * .13f, size.height * .84f, size.width * .31f, size.height * .73f, size.width * .48f, size.height * .63f)
+                lineTo(size.width * .58f, size.height * .71f)
+                cubicTo(size.width * .36f, size.height * .84f, size.width * .18f, size.height * .97f, -size.width * .05f, size.height * 1.07f)
                 close()
             }
-            drawPath(leafMass, SageGreen.copy(alpha = .18f))
+            drawPath(cobaltPassage, cobalt.copy(alpha = .91f))
 
-            val route = Path().apply {
-                moveTo(size.width * .03f, size.height * .87f)
-                cubicTo(size.width * .27f, size.height * .78f, size.width * .33f, size.height * .43f, size.width * .56f, size.height * .50f)
-                cubicTo(size.width * .72f, size.height * .55f, size.width * .82f, size.height * .30f, size.width * .97f, size.height * .18f)
+            val walkingTrace = Path().apply {
+                moveTo(size.width * .20f, size.height * 1.02f)
+                cubicTo(size.width * .48f, size.height * .89f, size.width * .63f, size.height * .58f, size.width * .82f, -size.height * .02f)
             }
-            drawPath(route, SageGreenDark.copy(alpha = .34f), style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(9f, 7f))))
-
-            // 单一钴蓝色与路线共用同一条斜向骨架，承担引导而不是角落装饰。
-            val bluePassage = Path().apply {
-                moveTo(size.width * .03f, size.height * .79f)
-                cubicTo(size.width * .24f, size.height * .72f, size.width * .40f, size.height * .56f, size.width * .58f, size.height * .49f)
-                cubicTo(size.width * .68f, size.height * .45f, size.width * .72f, size.height * .39f, size.width * .78f, size.height * .34f)
-            }
-            drawPath(bluePassage, cobalt.copy(alpha = .78f), style = Stroke(11.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(
+                walkingTrace,
+                Color(0xFF2F3028).copy(alpha = .82f),
+                style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 7f))),
+            )
         }
 
         if (moment != null) {
-            Box(
+            TornPhotoAnchor(
+                rawUri = moment.photoUri,
+                contentDescription = moment.label,
                 Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(top = 28.dp)
-                    .fillMaxWidth(.76f)
-                    .height(245.dp)
-                    .clip(tornShape)
-                    .background(SagePaperShade)
+                    .align(Alignment.TopStart)
+                    .offset(x = (-10).dp, y = maxHeight * .34f)
+                    .fillMaxWidth(.70f)
+                    .height(maxHeight * .34f)
                     .graphicsLayer {
                         alpha = reveal
                         translationX = (1f - reveal) * -28f
                     },
-            ) {
-                ScrapbookPhoto(moment.photoUri, moment.label, Modifier.fillMaxSize())
-                Box(Modifier.matchParentSize().background(Color.White.copy(alpha = .04f)))
-            }
-            Surface(
-                color = SagePaper.copy(alpha = .94f),
-                shape = RoundedCornerShape(10.dp),
-                shadowElevation = 1.dp,
-                modifier = Modifier.align(Alignment.CenterEnd).padding(top = 86.dp),
-            ) {
-                Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-                    Text(moment.label.ifBlank { "沿途发现" }, color = SageInk, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                    Text(
-                        landmark?.name ?: "园内片段",
-                        color = SageMuted,
-                        fontSize = 9.sp,
-                        maxLines = 1,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-            }
+            )
         } else {
             EmptyScrapbookNote(Modifier.align(Alignment.Center).fillMaxWidth(.82f))
         }
 
         Text(
-            "Along the way",
+            "Petals after rain",
             color = SageInk.copy(alpha = .62f),
-            fontSize = 10.sp,
-            letterSpacing = 1.2.sp,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 28.dp),
+            fontSize = 9.sp,
+            letterSpacing = 1.0.sp,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 22.dp),
         )
         if (moments.size > 1) {
-            Surface(
-                color = SageGreenDark.copy(alpha = .90f),
-                shape = RoundedCornerShape(100.dp),
-                modifier = Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 18.dp),
+            Row(
+                Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Text(
-                    "轻触换一张 · ${activeIndex + 1}/${moments.size}",
-                    color = Color.White,
-                    fontSize = 9.sp,
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                )
+                moments.take(5).forEachIndexed { index, _ ->
+                    Box(
+                        Modifier
+                            .size(if (index == activeIndex) 8.dp else 5.dp)
+                            .background(if (index == activeIndex) cobalt else SagePaperEdge, CircleShape),
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+private fun TornPhotoAnchor(
+    rawUri: String,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+) {
+    val tornShape = remember {
+        GenericShape { size, _ -> addPath(tornPhotoPath(size)) }
+    }
+    Box(modifier) {
+        Canvas(Modifier.matchParentSize()) {
+            drawPath(
+                tornPhotoPath(size),
+                SagePaperEdge.copy(alpha = .78f),
+                style = Stroke(7.dp.toPx(), cap = StrokeCap.Round),
+            )
+        }
+        ScrapbookPhoto(
+            rawUri,
+            contentDescription,
+            Modifier.matchParentSize().clip(tornShape).background(SagePaperShade),
+        )
+        Canvas(Modifier.matchParentSize()) {
+            // 可见的纤维毛边：确定性短线跨过照片与纸张边界，不使用整齐白框。
+            val fiber = Color(0xFFD8C8A8).copy(alpha = .92f)
+            repeat(34) { index ->
+                val x = size.width * (index / 33f)
+                val topY = size.height * (.025f + .017f * sin(index * 1.7).toFloat())
+                val bottomY = size.height * (.97f + .012f * sin(index * 1.2).toFloat())
+                val length = (2.5f + (index % 4)) * density
+                drawLine(fiber, Offset(x, topY - length), Offset(x + (index % 3 - 1) * density, topY + length), .7.dp.toPx())
+                drawLine(fiber, Offset(x, bottomY - length), Offset(x + ((index + 1) % 3 - 1) * density, bottomY + length), .7.dp.toPx())
+            }
+            repeat(20) { index ->
+                val y = size.height * (index / 19f)
+                val leftX = size.width * (.026f + .012f * sin(index * 1.45).toFloat())
+                val rightX = size.width * (.972f + .010f * sin(index * 1.15).toFloat())
+                val length = (2.5f + (index % 3)) * density
+                drawLine(fiber, Offset(leftX - length, y), Offset(leftX + length, y + (index % 2) * density), .7.dp.toPx())
+                drawLine(fiber, Offset(rightX - length, y), Offset(rightX + length, y - (index % 2) * density), .7.dp.toPx())
+            }
+        }
+    }
+}
+
+private fun tornPhotoPath(size: Size): Path = Path().apply {
+    moveTo(size.width * .025f, size.height * .06f)
+    lineTo(size.width * .19f, size.height * .018f)
+    lineTo(size.width * .38f, size.height * .05f)
+    lineTo(size.width * .57f, size.height * .012f)
+    lineTo(size.width * .79f, size.height * .055f)
+    lineTo(size.width * .975f, size.height * .025f)
+    lineTo(size.width * .99f, size.height * .26f)
+    lineTo(size.width * .955f, size.height * .49f)
+    lineTo(size.width * .988f, size.height * .74f)
+    lineTo(size.width * .95f, size.height * .965f)
+    lineTo(size.width * .78f, size.height * .99f)
+    lineTo(size.width * .60f, size.height * .955f)
+    lineTo(size.width * .42f, size.height * .995f)
+    lineTo(size.width * .22f, size.height * .96f)
+    lineTo(size.width * .018f, size.height * .985f)
+    lineTo(size.width * .045f, size.height * .73f)
+    lineTo(size.width * .012f, size.height * .52f)
+    lineTo(size.width * .05f, size.height * .29f)
+    close()
 }
 
 /**

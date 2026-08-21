@@ -13,6 +13,7 @@ import cn.tsinghua.sagemotion.model.JourneyPhotoMoment
 import cn.tsinghua.sagemotion.model.JourneyQuestion
 import cn.tsinghua.sagemotion.model.TaskPerformance
 import cn.tsinghua.sagemotion.model.RouteChoice
+import cn.tsinghua.sagemotion.model.ResultMetric
 import cn.tsinghua.sagemotion.ui.screens.ExperimentScreen
 import cn.tsinghua.sagemotion.ui.screens.HistoryScreen
 import cn.tsinghua.sagemotion.ui.screens.PostTaskSurveyScreen
@@ -467,6 +468,45 @@ fun VoiceManualInputScreenshot() {
                 scenario = ExperimentScenario.VOICE,
                 aiStage = AiStage.IDLE,
                 voiceTranscript = "附近哪里有好吃的？",
+            ),
+            onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
+            onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
+            onRouteSelected = {}, onScenarioSelected = {}, onConditionSelected = {}, onNextCondition = {},
+            onPreviewPrevious = {}, onPreviewNext = {}, onResearcherPanel = {}, onHistory = {},
+            onExport = {}, onExportAll = {}, onVoiceTranscript = {},
+            onCreatePhotoUri = { android.net.Uri.EMPTY }, onPhotoCaptured = {}, onShareJourney = {}, onBeginJourneySummary = {},
+        )
+    }
+}
+
+@Preview(name = "Voice Discovery Result", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+fun VoiceDiscoveryResultScreenshot() {
+    SageMotionTheme {
+        ExperimentScreen(
+            state = ExperimentUiState(
+                sessionStarted = true,
+                participantId = "P001",
+                order = ConditionOrder.ABC,
+                conditionIndex = 2,
+                scenario = ExperimentScenario.VOICE,
+                aiStage = AiStage.COMPLETE,
+                resultVisible = true,
+                voiceTranscript = "附近有什么适合拍照的地方？",
+                taskResult = AiTaskResult(
+                    title = "推荐：湖心桥东侧",
+                    summary = "向前约 180 米到湖心桥东侧，那里能把湖面、柳树和远处亭子一起拍进画面；下午侧光会更柔和。",
+                    uncertainty = "位置与现场状态请以实际环境为准",
+                    primaryAction = "完成体验",
+                    evidence = listOf("距离：约 180 米", "景观：湖面、柳树、亭子", "建议：下午侧光"),
+                    metrics = listOf(
+                        ResultMetric("约 180 米", "向前步行"),
+                        ResultMetric("湖心桥东侧", "湖面与柳树"),
+                        ResultMetric("下午侧光", "更柔和"),
+                    ),
+                    sourceLabel = "联网 Agent · 实时工具",
+                    isLiveData = true,
+                ),
             ),
             onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
             onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
