@@ -361,11 +361,7 @@ fun WelcomeScreen(
                     .graphicsLayer { alpha = orbIn },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AnimatedMascot(
-                    mood = MascotMood.IDLE,
-                    contentDescription = "银小叶正在招呼你",
-                    modifier = Modifier.size(48.dp),
-                )
+                Box(Modifier.size(8.dp).background(Color(0xFFB8D96D), CircleShape))
                 Column(Modifier.padding(start = 12.dp)) {
                     Text("银小叶已经在你身边", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     Text("它会陪你看路线、找方向、记录发现", color = Color.White.copy(alpha = .68f), fontSize = 11.sp)

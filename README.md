@@ -36,6 +36,7 @@
 - v1.3 设备兼容与会话回顾：内置 Vosk 中文离线识别；采用的推荐/备选路线会贯穿工作台、知识路线与分享图片；多次拍照和多次语音均按真实次数沿路线生成独立节点；会话结束时将游记 PNG 固化到历史记录并支持再次分享和随 ZIP 导出。
 - v1.4 统一语音输入：Vosk 的部分结果、分句结果和最终结果会持续写入同一个可编辑文本框，语音与键盘内容可合并，停止后由用户确认再提交；路线约束、圈搜自定义问题、语音问答和重新规划使用同一交互。联网 Agent 新增 OpenStreetMap 附近地点工具，餐饮问题会返回真实地点名称与距离，工具不可用时明确回退而不虚构商户。
 - v1.5 修复联网 Agent 的地点工具失败状态：餐饮查询会依次尝试两个 OpenStreetMap Overpass 实例和 Nominatim 有界搜索，失败时明确显示已尝试工具，不再把离线脚本包装成联网答案。知识路线会用橙色虚线保留“比较过但未采用”的改道方案。语音问答与重新规划统一为“输入框 + 圆形麦克风 + 确认按钮”，中央语音球可直接开始/结束录音，监听时按输入音量呼吸缩放。
+- v1.12 视觉与中途退出修订：路线页和探索工作台增加“保存并回到首页”；工具页返回探索工作台后可统一退出。语音、拍照与重规划底部面板统一为轻量毛玻璃；银小叶每个场景最多出现一个，只在进入或语义状态变化时短暂播放动作。知识游记改为明确标注的本机纸刊预览，并预留真实 Gathered Scenes 服务端生成边界。
 
 ## API 预留
 
@@ -84,7 +85,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 4. 每轮任务结束后记录参与者是否查看依据、换路线或采纳结果。
 5. 实验结束后在研究员控制台导出 CSV。
 
-更完整的实验执行说明见 [EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md)，视觉与动效规范见 [DESIGN_SPEC.md](DESIGN_SPEC.md)，上传 GitHub 见 [GITHUB_UPLOAD.md](GITHUB_UPLOAD.md)。
+更完整的实验执行说明见 [EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md)，视觉与动效规范见 [DESIGN_SPEC.md](DESIGN_SPEC.md)，真实生成式纸刊的后端边界见 [ZINE_GENERATION_INTEGRATION.md](ZINE_GENERATION_INTEGRATION.md)，上传 GitHub 见 [GITHUB_UPLOAD.md](GITHUB_UPLOAD.md)。
 
 ## 工程结构
 

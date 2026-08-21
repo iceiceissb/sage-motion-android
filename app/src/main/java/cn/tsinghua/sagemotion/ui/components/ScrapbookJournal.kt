@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -85,14 +86,14 @@ data class JourneyStats(
 )
 
 /**
- * 手账拼贴式知识游记。
+ * Gathered Scenes 风格的本机纸刊预览。
  *
  * 对应设计建议便签：「手账拼贴画的形式，路线+照片+小标题文字。
  * 可选：icon、AIGC、打卡点建筑、时间点、总耗时？」
  *
- * 版式取自旅行手账：纸底、胶带贴住的微倾照片、手写感的路线折线把打卡点串起来、
- * 每张照片配一句小标题。与「路线图」视图并存，不替换它——
- * 路线图回答「我走了哪里」，拼贴回答「这一天是什么样子」。
+ * 这里仅负责在端内保持真实照片、路线关系与数据可回看，不冒充生成模型输出。
+ * 真正的 Gathered Scenes 成品由服务端生成：真实照片为锚、单一高饱和色成为结构、
+ * 大面积留白与撕纸边界共同构成画面。与「路线图」视图并存，不替换它。
  *
  * 生成时按 [reveal] 逐块落位：先纸和路线，再照片，最后贴纸与统计，
  * 保持 staged transition，一次只解释一个主要变化。
@@ -124,7 +125,7 @@ fun ScrapbookJournal(
             PaperTexture(Modifier.matchParentSize())
             Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
                 ScrapbookHeader(stats, reveal)
-                ScrapbookSpine(
+                GatheredScenesField(
                     moments = moments,
                     landmarks = landmarks,
                     reveal = reveal,
@@ -192,7 +193,7 @@ private fun ScrapbookHeader(stats: JourneyStats, reveal: Float) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Surface(color = SageGreenDark, shape = RoundedCornerShape(100.dp)) {
                 Text(
-                    "拾景纸刊",
+                    "本机纸刊预览",
                     color = Color.White,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -200,16 +201,10 @@ private fun ScrapbookHeader(stats: JourneyStats, reveal: Float) {
                 )
             }
             Text(
-                "真实照片为锚 · 路线与发现成页",
+                "保留真实照片 · 生成式版本需联网",
                 color = SageMuted,
                 fontSize = 9.sp,
                 modifier = Modifier.padding(start = 7.dp).weight(1f),
-            )
-            AnimatedMascot(
-                mood = MascotMood.CELEBRATING,
-                animate = false,
-                contentDescription = "银小叶知识游记贴纸",
-                modifier = Modifier.size(32.dp),
             )
         }
         Row(verticalAlignment = Alignment.Bottom) {
@@ -236,6 +231,148 @@ private fun ScrapbookHeader(stats: JourneyStats, reveal: Float) {
             Text("共 ${stats.totalMinutes} 分钟", color = SageMuted, fontSize = 12.sp)
             Box(Modifier.padding(horizontal = 7.dp).size(3.dp).background(SageGold, CircleShape))
             Text("${stats.distanceMeters} 米", color = SageMuted, fontSize = 12.sp)
+        }
+    }
+}
+
+/**
+ * 端内预览遵循 Gathered Scenes 的结构，而不是堆叠多张“拍立得”：一次只让一张真实照片
+ * 成为锚点，路线曲线、一个钴蓝色结构与大块安静纸面共同组织视线。轻触画面轮换照片。
+ */
+@Composable
+private fun GatheredScenesField(
+    moments: List<JourneyPhotoMoment>,
+    landmarks: List<ParkLandmark>,
+    reveal: Float,
+    selectedIndex: Int,
+    onMomentSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val activeIndex = selectedIndex.coerceIn(0, moments.lastIndex.coerceAtLeast(0))
+    val moment = moments.getOrNull(activeIndex)
+    val landmark = landmarks.getOrNull(
+        if (landmarks.isEmpty()) 0
+        else ((activeIndex + 1) * landmarks.lastIndex / moments.size.coerceAtLeast(1)).coerceIn(0, landmarks.lastIndex),
+    )
+    val cobalt = Color(0xFF2857C5)
+    val tornShape = remember {
+        GenericShape { size, _ ->
+            moveTo(size.width * .03f, size.height * .05f)
+            lineTo(size.width * .18f, size.height * .015f)
+            lineTo(size.width * .37f, size.height * .04f)
+            lineTo(size.width * .58f, size.height * .012f)
+            lineTo(size.width * .78f, size.height * .045f)
+            lineTo(size.width * .97f, size.height * .02f)
+            lineTo(size.width * .985f, size.height * .22f)
+            lineTo(size.width * .96f, size.height * .43f)
+            lineTo(size.width * .99f, size.height * .66f)
+            lineTo(size.width * .955f, size.height * .94f)
+            lineTo(size.width * .78f, size.height * .98f)
+            lineTo(size.width * .61f, size.height * .955f)
+            lineTo(size.width * .42f, size.height * .99f)
+            lineTo(size.width * .23f, size.height * .96f)
+            lineTo(size.width * .02f, size.height * .985f)
+            lineTo(size.width * .04f, size.height * .75f)
+            lineTo(size.width * .012f, size.height * .53f)
+            lineTo(size.width * .045f, size.height * .31f)
+            close()
+        }
+    }
+
+    Box(
+        modifier
+            .height(430.dp)
+            .clickable(
+                enabled = moments.size > 1,
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+            ) { onMomentSelected((activeIndex + 1) % moments.size) },
+    ) {
+        Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = reveal }) {
+            // 宽阔的安静纸面里只保留一组简化叶形，避免逐叶描摹。
+            val leafMass = Path().apply {
+                moveTo(size.width * .57f, size.height * .10f)
+                cubicTo(size.width * .92f, size.height * .02f, size.width * 1.02f, size.height * .26f, size.width * .73f, size.height * .42f)
+                cubicTo(size.width * .92f, size.height * .44f, size.width * .99f, size.height * .67f, size.width * .64f, size.height * .70f)
+                cubicTo(size.width * .74f, size.height * .88f, size.width * .56f, size.height * .96f, size.width * .49f, size.height * .72f)
+                close()
+            }
+            drawPath(leafMass, SageGreen.copy(alpha = .18f))
+
+            val route = Path().apply {
+                moveTo(size.width * .03f, size.height * .87f)
+                cubicTo(size.width * .27f, size.height * .78f, size.width * .33f, size.height * .43f, size.width * .56f, size.height * .50f)
+                cubicTo(size.width * .72f, size.height * .55f, size.width * .82f, size.height * .30f, size.width * .97f, size.height * .18f)
+            }
+            drawPath(route, SageGreenDark.copy(alpha = .34f), style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(9f, 7f))))
+
+            // 单一钴蓝色与路线共用同一条斜向骨架，承担引导而不是角落装饰。
+            val bluePassage = Path().apply {
+                moveTo(size.width * .03f, size.height * .79f)
+                cubicTo(size.width * .24f, size.height * .72f, size.width * .40f, size.height * .56f, size.width * .58f, size.height * .49f)
+                cubicTo(size.width * .68f, size.height * .45f, size.width * .72f, size.height * .39f, size.width * .78f, size.height * .34f)
+            }
+            drawPath(bluePassage, cobalt.copy(alpha = .78f), style = Stroke(11.dp.toPx(), cap = StrokeCap.Round))
+        }
+
+        if (moment != null) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(top = 28.dp)
+                    .fillMaxWidth(.76f)
+                    .height(245.dp)
+                    .clip(tornShape)
+                    .background(SagePaperShade)
+                    .graphicsLayer {
+                        alpha = reveal
+                        translationX = (1f - reveal) * -28f
+                    },
+            ) {
+                ScrapbookPhoto(moment.photoUri, moment.label, Modifier.fillMaxSize())
+                Box(Modifier.matchParentSize().background(Color.White.copy(alpha = .04f)))
+            }
+            Surface(
+                color = SagePaper.copy(alpha = .94f),
+                shape = RoundedCornerShape(10.dp),
+                shadowElevation = 1.dp,
+                modifier = Modifier.align(Alignment.CenterEnd).padding(top = 86.dp),
+            ) {
+                Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                    Text(moment.label.ifBlank { "沿途发现" }, color = SageInk, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text(
+                        landmark?.name ?: "园内片段",
+                        color = SageMuted,
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
+        } else {
+            EmptyScrapbookNote(Modifier.align(Alignment.Center).fillMaxWidth(.82f))
+        }
+
+        Text(
+            "Along the way",
+            color = SageInk.copy(alpha = .62f),
+            fontSize = 10.sp,
+            letterSpacing = 1.2.sp,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 28.dp),
+        )
+        if (moments.size > 1) {
+            Surface(
+                color = SageGreenDark.copy(alpha = .90f),
+                shape = RoundedCornerShape(100.dp),
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = 18.dp),
+            ) {
+                Text(
+                    "轻触换一张 · ${activeIndex + 1}/${moments.size}",
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                )
+            }
         }
     }
 }
@@ -583,7 +720,7 @@ private fun ScrapbookFooter(stats: JourneyStats, reveal: Float, modifier: Modifi
             ScrapStat("改线", stats.replanCount.toString(), Modifier.weight(1f))
         }
         Text(
-            "由 SAGE 依据本次旅程素材编排 · 分享前请核对内容",
+            "本机排版预览 · 照片未上传 · 模型纸刊需接入生成服务",
             color = SageMuted,
             fontSize = 9.sp,
             modifier = Modifier.padding(top = 9.dp),

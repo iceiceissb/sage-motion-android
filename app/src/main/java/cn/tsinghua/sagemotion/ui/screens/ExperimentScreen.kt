@@ -231,6 +231,7 @@ fun ExperimentScreen(
             onConstraintChanged = onRouteConstraintChanged,
             onPreferenceToggled = onRoutePreferenceToggled,
             onResearcherPanel = { onResearcherPanel(true) },
+            onExitRequest = { showExitDialog = true },
         )
 
         ExperimentScenario.EXPLORE -> ExplorationHub(
@@ -240,6 +241,7 @@ fun ExperimentScreen(
             onReplan = { onScenarioSelected(ExperimentScenario.ADJUST) },
             onFinish = onBeginJourneySummary,
             onResearcherPanel = { onResearcherPanel(true) },
+            onExitRequest = { showExitDialog = true },
         )
 
         ExperimentScenario.VISUAL -> VisualExperiment(
@@ -344,6 +346,7 @@ private fun ExplorationHub(
     onReplan: () -> Unit,
     onFinish: () -> Unit,
     onResearcherPanel: () -> Unit,
+    onExitRequest: () -> Unit,
 ) {
     val density = LocalDensity.current
     var consoleHeightPx by remember(density) {
@@ -361,24 +364,23 @@ private fun ExplorationHub(
         )
         Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .18f)))
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {
-            AiStatusPanel(state, onResearcherPanel) {}
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                JourneyExitButton(onExitRequest)
+                Box(Modifier.weight(1f)) { AiStatusPanel(state, onResearcherPanel, onCancel = {}) }
+            }
             Surface(
                 color = SageGreenDark.copy(alpha = .94f),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.padding(top = 8.dp),
             ) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                    AnimatedMascot(
-                        mood = MascotMood.NAVIGATING,
-                        contentDescription = "银小叶正在陪伴探索",
-                        modifier = Modifier.size(30.dp),
-                    )
+                    Box(Modifier.size(8.dp).background(Color(0xFF9DE0B6), CircleShape))
                     Text(
                         "${state.activeRouteName}进行中",
                         color = Color.White,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 6.dp).weight(1f),
+                        modifier = Modifier.padding(start = 9.dp).weight(1f),
                     )
                     Text("探索中", color = Color.White.copy(alpha = .72f), fontSize = 10.sp)
                 }
@@ -451,14 +453,7 @@ private fun HubActionCard(
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                AnimatedMascot(
-                    mood = when (kind) {
-                        HubTaskKind.PHOTO -> MascotMood.DISCOVERING
-                        HubTaskKind.VOICE -> MascotMood.LISTENING
-                        HubTaskKind.REPLAN -> MascotMood.NAVIGATING
-                    },
-                    modifier = Modifier.size(33.dp),
-                )
+                HubTaskGlyph(kind, accent)
                 Spacer(Modifier.weight(1f))
                 Surface(color = accent.copy(alpha = .12f), shape = RoundedCornerShape(100.dp)) {
                     Text(detail, color = accent, fontSize = 8.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
@@ -470,6 +465,20 @@ private fun HubActionCard(
 }
 
 private enum class HubTaskKind { PHOTO, VOICE, REPLAN }
+
+@Composable
+private fun JourneyExitButton(onClick: () -> Unit) {
+    Surface(
+        color = Color.White.copy(alpha = .90f),
+        shape = CircleShape,
+        shadowElevation = 7.dp,
+        modifier = Modifier.padding(end = 9.dp),
+    ) {
+        IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.AutoMirrored.Filled.ExitToApp, "保存并回到首页", tint = SageInk)
+        }
+    }
+}
 
 /** 简洁线性图标：不使用大色块、外圈或装饰弧，避免在浅色地图上形成灰边。 */
 @Composable
@@ -540,7 +549,12 @@ private fun FunctionHeader(
             }
         }
         Box(Modifier.weight(1f)) {
-            AiStatusPanel(state, onResearcherPanel, onCancel)
+            AiStatusPanel(
+                state = state,
+                onLongPress = onResearcherPanel,
+                onCancel = onCancel,
+                showMascot = state.scenario != ExperimentScenario.VOICE,
+            )
         }
     }
 }
@@ -557,6 +571,7 @@ private fun RouteExperiment(
     onConstraintChanged: (String) -> Unit,
     onPreferenceToggled: (String) -> Unit,
     onResearcherPanel: () -> Unit,
+    onExitRequest: () -> Unit,
 ) {
     val inspection = LocalInspectionMode.current
     val constraintSpeech = if (inspection) {
@@ -580,11 +595,12 @@ private fun RouteExperiment(
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 10.dp),
         ) {
-            AiStatusPanel(
-                state = state,
-                onLongPress = onResearcherPanel,
-                onCancel = onCancel,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                JourneyExitButton(onExitRequest)
+                Box(Modifier.weight(1f)) {
+                    AiStatusPanel(state = state, onLongPress = onResearcherPanel, onCancel = onCancel)
+                }
+            }
             PromptBubble(
                 text = if (state.isRunning || state.resultVisible) {
                     buildString {
@@ -672,12 +688,7 @@ private fun RouteConstraintCard(
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 17.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AnimatedMascot(
-                    mood = MascotMood.NAVIGATING,
-                    contentDescription = "银小叶准备规划路线",
-                    modifier = Modifier.size(46.dp),
-                )
-                Column(Modifier.padding(start = 11.dp).weight(1f)) {
+                Column(Modifier.weight(1f)) {
                     Text("先约束，再推荐", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text("选择偏好，也可以直接说出今天的需求", color = SageMuted, fontSize = 11.sp)
                 }
@@ -746,6 +757,7 @@ private fun AiStatusPanel(
     state: ExperimentUiState,
     onLongPress: () -> Unit,
     onCancel: () -> Unit,
+    showMascot: Boolean = true,
 ) {
     val semantic = state.condition != ExperimentCondition.BASELINE
     val full = state.condition == ExperimentCondition.SAGE_FULL
@@ -757,11 +769,13 @@ private fun AiStatusPanel(
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 13.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AnimatedMascot(
-                    mood = mascotMoodFor(state),
-                    modifier = Modifier.size(36.dp),
-                )
-                Spacer(Modifier.width(8.dp))
+                if (showMascot) {
+                    AnimatedMascot(
+                        mood = mascotMoodFor(state),
+                        modifier = Modifier.size(36.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
                 Column(Modifier.weight(1f)) {
                     AnimatedContent(
                         targetState = statusTitle(state, semantic),
@@ -882,11 +896,9 @@ private fun PromptBubble(text: String) {
 
 @Composable
 private fun StartCard(title: String, actionLabel: String, onRun: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
+    FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        color = Color.White,
         modifier = modifier.fillMaxWidth(),
-        shadowElevation = 10.dp,
     ) {
         Column(
             modifier = Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 20.dp),
@@ -909,10 +921,9 @@ private fun VisualStartCard(
     onRun: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        color = Color.White,
-        shadowElevation = 10.dp,
+        tint = Color(0xFFEAF3EC),
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp)) {
@@ -948,10 +959,9 @@ private fun VoiceStartCard(
     onRun: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        color = Color.White,
-        shadowElevation = 10.dp,
+        tint = Color(0xFFE7F0F5),
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp)) {
@@ -1450,10 +1460,9 @@ private fun CircleSearchPanel(
         circleReady -> 1
         else -> 0
     }
-    Surface(
-        color = Color.White.copy(alpha = .98f),
+    FrostedGlassSurface(
+        tint = Color(0xFFF2F6EF),
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        shadowElevation = 18.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         AnimatedContent(
@@ -1991,14 +2000,9 @@ private fun JourneyRoutePanel(
                 .padding(horizontal = 18.dp, vertical = 16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AnimatedMascot(
-                    mood = MascotMood.CELEBRATING,
-                    contentDescription = "银小叶展示知识游记",
-                    modifier = Modifier.size(48.dp),
-                )
-                Column(Modifier.padding(start = 10.dp).weight(1f)) {
-                    Text(if (zineMode) "今天的拾景纸刊" else "今天走过的知识路线", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                    Text(if (zineMode) "真实照片为锚，把路线与发现重新装订" else "点击沿线照片，回看当时的问题与回答", color = SageMuted, fontSize = 11.sp)
+                Column(Modifier.weight(1f)) {
+                    Text(if (zineMode) "今天的纸刊预览" else "今天走过的知识路线", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (zineMode) "本机保留真实照片；模型生成版需由服务端返回" else "点击沿线照片，回看当时的问题与回答", color = SageMuted, fontSize = 11.sp)
                 }
                 IconButton(onClick = onShare, modifier = Modifier.background(SageMist, CircleShape)) {
                     Icon(Icons.Default.Share, "分享知识游记", tint = SageGreenDark)
@@ -2014,7 +2018,7 @@ private fun JourneyRoutePanel(
                     variant = 0,
                     tint = Color(0xFFF1EDDA),
                     modifier = Modifier.weight(1f),
-                ) { Text("拾景纸刊", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                ) { Text("纸刊预览", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
                 BubbleChoice(
                     selected = !zineMode,
                     onClick = { zineMode = false },
@@ -2104,7 +2108,7 @@ private fun JourneyRoutePanel(
                 if (onEvidence != null) {
                     OutlinedButton(onClick = onEvidence, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(15.dp)) { Text("生成依据") }
                 }
-                OutlinedButton(onClick = onReset, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(15.dp)) { Text("重新生成") }
+                OutlinedButton(onClick = onReset, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(15.dp)) { Text("重新编排") }
             }
             Button(onClick = onPrimary, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(53.dp), shape = RoundedCornerShape(17.dp)) {
                 Text(result.primaryAction, fontSize = 15.sp, color = Color.White)
@@ -2493,10 +2497,9 @@ private fun ReplanInputCard(
     modifier: Modifier = Modifier,
 ) {
     val suggested = "前方临时封路，而且快下雨了，帮我调整路线"
-    Surface(
+    FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        color = Color.White,
-        shadowElevation = 10.dp,
+        tint = Color(0xFFFFF2DF),
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp)) {
@@ -2582,10 +2585,9 @@ private fun ResultPanel(
     onShare: (() -> Unit)? = null,
     photoUris: List<String> = emptyList(),
 ) {
-    Surface(
+    FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        color = Color.White,
-        shadowElevation = 12.dp,
+        tint = Color(0xFFEAF3EC),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 20.dp)) {

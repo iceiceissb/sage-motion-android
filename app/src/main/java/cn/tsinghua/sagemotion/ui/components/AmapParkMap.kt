@@ -80,6 +80,7 @@ import com.amap.api.services.route.DriveRouteResultV2
 import com.amap.api.services.route.RideRouteResultV2
 import com.amap.api.services.route.RouteSearchV2
 import com.amap.api.services.route.WalkRouteResultV2
+import java.util.Locale
 import kotlin.math.ceil
 
 private const val AMAP_PRIVACY_URL = "https://lbs.amap.com/pages/privacy/"
@@ -361,11 +362,7 @@ private fun ParkRouteStatusCard(
         ) {
             Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    AnimatedMascot(
-                        mood = MascotMood.NAVIGATING,
-                        contentDescription = "银小叶路线向导",
-                        modifier = Modifier.size(36.dp),
-                    )
+                    Text("↗", color = Color(0xFF315E4B), fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Column(
                         Modifier
                             .weight(1f)
@@ -402,7 +399,7 @@ private fun ParkRouteStatusCard(
                             text = state.status,
                             color = if (state.isError) Color(0xFFB35D2E) else Color(0xFF34423B),
                             fontSize = 10.sp,
-                            modifier = Modifier.padding(start = 40.dp, top = 3.dp),
+                            modifier = Modifier.padding(top = 3.dp),
                         )
                     }
                     if (state.isGuiding && state.canRecenter) {
@@ -425,11 +422,7 @@ private fun ParkRouteStatusCard(
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AnimatedMascot(
-                    mood = MascotMood.NAVIGATING,
-                    contentDescription = "银小叶路线向导",
-                    modifier = Modifier.size(42.dp),
-                )
+                Text("↗", color = Color(0xFF315E4B), fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Text(
                     text = if (state.isGuiding) "银小叶 · 园内指引" else "银小叶 · 高德路线",
                     color = Color(0xFF315E4B),
@@ -909,7 +902,7 @@ private fun routeSummary(path: PlannedPath): String {
 }
 
 private fun formatDistance(meters: Float): String =
-    if (meters < 1_000f) "${meters.toInt()} 米" else String.format("%.1f 公里", meters / 1_000f)
+    if (meters < 1_000f) "${meters.toInt()} 米" else String.format(Locale.CHINA, "%.1f 公里", meters / 1_000f)
 
 private fun remainingDistance(location: LatLng, points: List<LatLng>, nearestIndex: Int): Float {
     var distance = AMapUtils.calculateLineDistance(location, points[nearestIndex])
