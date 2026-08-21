@@ -3,7 +3,16 @@ package cn.tsinghua.sagemotion.ui.components
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
+import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color as AndroidColor
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Shader
+import android.graphics.Typeface
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -82,6 +91,7 @@ import com.amap.api.services.route.RouteSearchV2
 import com.amap.api.services.route.WalkRouteResultV2
 import java.util.Locale
 import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 private const val AMAP_PRIVACY_URL = "https://lbs.amap.com/pages/privacy/"
 private const val PRIVACY_PREFERENCES = "sage_amap_privacy"
@@ -183,6 +193,12 @@ fun AmapParkMap(
     guidanceControls: Boolean = false,
     guidanceBottomInset: Dp = 0.dp,
     gesturesEnabled: Boolean = true,
+    showAlternativeRoutes: Boolean = true,
+    journeyPhotoUris: List<String> = emptyList(),
+    journeyVoiceCount: Int = 0,
+    journeyReplanCount: Int = 0,
+    selectedJourneyPhotoIndex: Int = -1,
+    onJourneyPhotoSelected: (Int) -> Unit = {},
 ) {
     val inspection = LocalInspectionMode.current
     val privacyAgreed = LocalAmapPrivacyAgreed.current
@@ -273,6 +289,23 @@ fun AmapParkMap(
     }
     LaunchedEffect(controller, selectedAlternative) {
         controller.selectAlternative(selectedAlternative)
+    }
+    LaunchedEffect(
+        controller,
+        showAlternativeRoutes,
+        journeyPhotoUris,
+        journeyVoiceCount,
+        journeyReplanCount,
+        selectedJourneyPhotoIndex,
+    ) {
+        controller.updateJourneyPresentation(
+            showAlternatives = showAlternativeRoutes,
+            photoUris = journeyPhotoUris,
+            voiceCount = journeyVoiceCount,
+            replanCount = journeyReplanCount,
+            selectedPhotoIndex = selectedJourneyPhotoIndex,
+            onPhotoSelected = onJourneyPhotoSelected,
+        )
     }
 
     DisposableEffect(mapView, controller, lifecycleOwner) {
@@ -454,10 +487,18 @@ private class ParkRouteController(
     private val routeSearch = runCatching { RouteSearchV2(context) }.getOrNull()
     private val routePolylines = mutableListOf<Polyline>()
     private val endpointMarkers = mutableListOf<Marker>()
+    private val journeyMarkers = mutableListOf<Marker>()
+    private val photoMarkerIndices = mutableMapOf<String, Int>()
     private var locationMarker: Marker? = null
     private var locationClient: AMapLocationClient? = null
     private var plannedPaths: List<PlannedPath> = emptyList()
     private var selectedAlternative = false
+    private var showAlternativeRoutes = true
+    private var journeyPhotoUris: List<String> = emptyList()
+    private var journeyVoiceCount = 0
+    private var journeyReplanCount = 0
+    private var selectedJourneyPhotoIndex = -1
+    private var onJourneyPhotoSelected: (Int) -> Unit = {}
     private var latestLocation: LatLng? = null
     private var guidanceRequested = false
     private var pendingGuidanceRoute = false
@@ -467,6 +508,12 @@ private class ParkRouteController(
 
     init {
         routeSearch?.setRouteSearchListener(this)
+        map.setOnMarkerClickListener { marker ->
+            photoMarkerIndices[marker.id]?.let { index ->
+                onJourneyPhotoSelected(index)
+                true
+            } ?: false
+        }
         if (routeSearch == null) {
             uiState = ParkRouteUiState(status = "路线服务初始化失败", isError = true)
         }
@@ -484,13 +531,33 @@ private class ParkRouteController(
         plannedPaths = emptyList()
         routePolylines.forEach(Polyline::remove)
         endpointMarkers.forEach(Marker::remove)
+        journeyMarkers.forEach(Marker::remove)
         routePolylines.clear()
         endpointMarkers.clear()
+        journeyMarkers.clear()
+        photoMarkerIndices.clear()
         uiState = ParkRouteUiState(status = "等待开始路线规划")
     }
 
     fun selectAlternative(alternative: Boolean) {
         selectedAlternative = alternative
+        if (plannedPaths.isNotEmpty()) drawPlannedPaths(fitCamera = false)
+    }
+
+    fun updateJourneyPresentation(
+        showAlternatives: Boolean,
+        photoUris: List<String>,
+        voiceCount: Int,
+        replanCount: Int,
+        selectedPhotoIndex: Int,
+        onPhotoSelected: (Int) -> Unit,
+    ) {
+        showAlternativeRoutes = showAlternatives
+        journeyPhotoUris = photoUris.take(8)
+        journeyVoiceCount = voiceCount.coerceIn(0, 6)
+        journeyReplanCount = replanCount.coerceAtLeast(0)
+        selectedJourneyPhotoIndex = selectedPhotoIndex
+        this.onJourneyPhotoSelected = onPhotoSelected
         if (plannedPaths.isNotEmpty()) drawPlannedPaths(fitCamera = false)
     }
 
@@ -559,6 +626,7 @@ private class ParkRouteController(
         locationClient = null
         routePolylines.forEach(Polyline::remove)
         endpointMarkers.forEach(Marker::remove)
+        journeyMarkers.forEach(Marker::remove)
         locationMarker?.remove()
     }
 
@@ -703,20 +771,24 @@ private class ParkRouteController(
     private fun drawPlannedPaths(fitCamera: Boolean) {
         routePolylines.forEach(Polyline::remove)
         endpointMarkers.forEach(Marker::remove)
+        journeyMarkers.forEach(Marker::remove)
         routePolylines.clear()
         endpointMarkers.clear()
+        journeyMarkers.clear()
+        photoMarkerIndices.clear()
         if (plannedPaths.isEmpty()) return
 
         val selectedIndex = if (selectedAlternative && plannedPaths.size > 1) 1 else 0
         plannedPaths.forEachIndexed { index, path ->
             val selected = index == selectedIndex
+            if (!showAlternativeRoutes && !selected) return@forEachIndexed
             routePolylines += map.addPolyline(
                 PolylineOptions()
                     .addAll(path.points)
                     .width(if (selected) 14f else 8f)
                     .color(
                         when {
-                            selected && index == 0 -> AndroidColor.rgb(49, 94, 75)
+                            selected && (index == 0 || !showAlternativeRoutes) -> AndroidColor.rgb(49, 94, 75)
                             selected -> AndroidColor.rgb(184, 107, 44)
                             else -> AndroidColor.argb(125, 142, 153, 147)
                         },
@@ -732,6 +804,7 @@ private class ParkRouteController(
                 .title(if (guidanceRequested) "当前位置附近" else "园内路线起点")
                 .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)),
         )
+        drawJourneyMarkers(selectedPath)
         endpointMarkers += map.addMarker(
             MarkerOptions()
                 .position(selectedPath.points.last())
@@ -749,6 +822,145 @@ private class ParkRouteController(
             isError = false,
         )
         if (fitCamera) fitRoute(selectedPath.points)
+    }
+
+    private data class JourneyMarkerSpec(
+        val kind: String,
+        val photoUri: String? = null,
+        val photoIndex: Int = -1,
+    )
+
+    private fun drawJourneyMarkers(path: PlannedPath) {
+        if (path.points.size < 2) return
+        val specs = buildList {
+            journeyPhotoUris.forEachIndexed { index, uri ->
+                add(JourneyMarkerSpec(kind = "photo", photoUri = uri, photoIndex = index))
+            }
+            repeat(journeyVoiceCount) { add(JourneyMarkerSpec(kind = "voice")) }
+            if (journeyReplanCount > 0) add(JourneyMarkerSpec(kind = "replan"))
+        }
+        specs.forEachIndexed { index, spec ->
+            val fraction = if (specs.size == 1) .50f else .12f + .76f * index / (specs.size - 1f)
+            val marker = map.addMarker(
+                MarkerOptions()
+                    .position(pointAtFraction(path.points, fraction))
+                    .anchor(.5f, .5f)
+                    .zIndex(16f + index)
+                    .title(
+                        when (spec.kind) {
+                            "photo" -> "第 ${spec.photoIndex + 1} 个照片发现"
+                            "voice" -> "沿途语音发现"
+                            else -> "路线调整节点"
+                        },
+                    )
+                    .icon(
+                        when (spec.kind) {
+                            "photo" -> photoMarkerIcon(
+                                spec.photoUri.orEmpty(),
+                                spec.photoIndex,
+                                selected = spec.photoIndex == selectedJourneyPhotoIndex,
+                            )
+                            "voice" -> textMarkerIcon("语", AndroidColor.rgb(78, 113, 139))
+                            else -> textMarkerIcon("改", AndroidColor.rgb(184, 107, 44))
+                        },
+                    ),
+            )
+            journeyMarkers += marker
+            if (spec.kind == "photo") photoMarkerIndices[marker.id] = spec.photoIndex
+        }
+    }
+
+    private fun pointAtFraction(points: List<LatLng>, fraction: Float): LatLng {
+        if (points.size < 2) return points.first()
+        val segmentLengths = points.zipWithNext { a, b -> AMapUtils.calculateLineDistance(a, b) }
+        val target = segmentLengths.sum() * fraction.coerceIn(0f, 1f)
+        var walked = 0f
+        segmentLengths.forEachIndexed { index, length ->
+            if (walked + length >= target && length > 0f) {
+                val local = ((target - walked) / length).coerceIn(0f, 1f)
+                val start = points[index]
+                val end = points[index + 1]
+                return LatLng(
+                    start.latitude + (end.latitude - start.latitude) * local,
+                    start.longitude + (end.longitude - start.longitude) * local,
+                )
+            }
+            walked += length
+        }
+        return points.last()
+    }
+
+    private fun photoMarkerIcon(rawUri: String, index: Int, selected: Boolean) = runCatching {
+        val source = decodeMarkerBitmap(rawUri) ?: error("photo unavailable")
+        val density = context.resources.displayMetrics.density
+        val size = ((if (selected) 58f else 50f) * density).roundToInt().coerceAtLeast(64)
+        val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = AndroidCanvas(output)
+        val center = size / 2f
+        val radius = size * .39f
+        canvas.drawCircle(center, center, size * .48f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = if (selected) AndroidColor.rgb(49, 94, 75) else AndroidColor.WHITE
+        })
+        val shader = BitmapShader(source, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+        val scale = maxOf(size * .78f / source.width, size * .78f / source.height)
+        shader.setLocalMatrix(Matrix().apply {
+            setScale(scale, scale)
+            postTranslate((size - source.width * scale) / 2f, (size - source.height * scale) / 2f)
+        })
+        canvas.drawCircle(center, center, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.shader = shader })
+        canvas.drawCircle(center, center, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = density * 2.2f
+        })
+        val badgeRadius = density * 8f
+        val badgeX = size - badgeRadius * 1.05f
+        val badgeY = badgeRadius * 1.05f
+        canvas.drawCircle(badgeX, badgeY, badgeRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(184, 107, 44) })
+        canvas.drawText(
+            (index + 1).toString(),
+            badgeX,
+            badgeY + density * 3.4f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.WHITE
+                textAlign = Paint.Align.CENTER
+                textSize = density * 9f
+                typeface = Typeface.DEFAULT_BOLD
+            },
+        )
+        BitmapDescriptorFactory.fromBitmap(output)
+    }.getOrElse { BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN) }
+
+    private fun decodeMarkerBitmap(rawUri: String): Bitmap? {
+        val uri = Uri.parse(rawUri)
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        while (bounds.outWidth / sample > 320 || bounds.outHeight / sample > 320) sample *= 2
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        return context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+    }
+
+    private fun textMarkerIcon(label: String, backgroundColor: Int) = run {
+        val density = context.resources.displayMetrics.density
+        val size = (40f * density).roundToInt().coerceAtLeast(56)
+        val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = AndroidCanvas(output)
+        val center = size / 2f
+        canvas.drawCircle(center, center, size * .43f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE })
+        canvas.drawCircle(center, center, size * .36f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = backgroundColor })
+        canvas.drawText(
+            label,
+            center,
+            center + density * 5f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.WHITE
+                textAlign = Paint.Align.CENTER
+                textSize = density * 14f
+                typeface = Typeface.DEFAULT_BOLD
+            },
+        )
+        BitmapDescriptorFactory.fromBitmap(output)
     }
 
     private fun updateGuidance(location: LatLng) {

@@ -150,6 +150,7 @@ import cn.tsinghua.sagemotion.ui.components.VisualSemanticMotion
 import cn.tsinghua.sagemotion.ui.components.VoiceSemanticField
 import cn.tsinghua.sagemotion.ui.components.sageBubbleShape
 import cn.tsinghua.sagemotion.ui.theme.SageDivider
+import cn.tsinghua.sagemotion.ui.theme.SageGold
 import cn.tsinghua.sagemotion.ui.theme.SageGreen
 import cn.tsinghua.sagemotion.ui.theme.SageGreenDark
 import cn.tsinghua.sagemotion.ui.theme.SageInk
@@ -604,17 +605,17 @@ private fun RouteExperiment(
                     AiStatusPanel(state = state, onLongPress = onResearcherPanel, onCancel = onCancel)
                 }
             }
-            PromptBubble(
-                text = if (state.isRunning || state.resultVisible) {
-                    buildString {
-                        append("路线约束：")
-                        append(routePreferenceSummary(state.routePreferenceIds))
-                        state.routeConstraintText.takeIf { it.isNotBlank() }?.let { append(" · $it") }
-                    }
-                } else {
-                    "先告诉我你今天想怎么走，再为你推荐合适的路线"
-                },
-            )
+            if (state.resultVisible) {
+                RoutePreferenceBubbles(state.routePreferenceIds)
+            } else {
+                PromptBubble(
+                    text = if (state.isRunning) {
+                        "正在把偏好与园路条件放到一起比较"
+                    } else {
+                        "先告诉我你今天想怎么走，再为你推荐合适的路线"
+                    },
+                )
+            }
         }
 
         AnimatedVisibility(
@@ -659,12 +660,42 @@ private fun RouteExperiment(
     }
 }
 
-private fun routePreferenceSummary(ids: Set<String>): String = listOf(
-    "shade" to "阴凉",
-    "rest" to "有座椅",
-    "short" to "路程短",
-    "quiet" to "少人安静",
-).filter { it.first in ids }.joinToString("、") { it.second }.ifBlank { "舒适易行" }
+@Composable
+private fun RoutePreferenceBubbles(ids: Set<String>) {
+    val options = listOf(
+        Triple("shade", "☘", "阴凉"),
+        Triple("rest", "⌑", "座椅"),
+        Triple("short", "↗", "短程"),
+        Triple("quiet", "◌", "安静"),
+    ).filter { ids.isEmpty() || it.first in ids }
+    Surface(
+        color = Color.White.copy(alpha = .88f),
+        shape = sageBubbleShape(3),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .92f)),
+        shadowElevation = 3.dp,
+        modifier = Modifier.padding(top = 10.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("本次偏好", color = SageMuted, fontSize = 9.sp)
+            options.take(4).forEachIndexed { index, (_, glyph, label) ->
+                val accent = if (index % 2 == 0) SageGreenDark else SageOchre
+                Surface(color = accent.copy(alpha = .12f), shape = CircleShape, modifier = Modifier.weight(1f)) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(vertical = 5.dp),
+                    ) {
+                        Text(glyph, color = accent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Text(label, color = SageInk, fontSize = 8.sp, maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+}
 
 private fun mascotMoodFor(state: ExperimentUiState): MascotMood = when {
     state.aiStage == AiStage.COMPLETE || state.scenario == ExperimentScenario.CREATE -> MascotMood.CELEBRATING
@@ -1031,22 +1062,39 @@ private fun RouteResultPanel(
     onReset: () -> Unit,
 ) {
     val full = condition == ExperimentCondition.SAGE_FULL
+    val routeTitle = if (choice == RouteChoice.RECOMMENDED) result.title else result.alternativeTitle ?: result.title
     FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp)) {
-            ResultSourceNote(result)
-            Text(
-                text = if (choice == RouteChoice.RECOMMENDED) result.title else result.alternativeTitle ?: result.title,
-                color = SageInk,
-                fontSize = 21.sp,
-                fontWeight = FontWeight.SemiBold,
+        Column(Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(color = SageMist, shape = RoundedCornerShape(100.dp)) {
+                    Row(Modifier.padding(horizontal = 9.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(7.dp).background(if (result.isLiveData) Color(0xFF69C793) else SageGold, CircleShape))
+                        Text(
+                            result.sourceLabel.substringBefore("（").substringBefore("(").take(22),
+                            color = SageGreenDark,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(start = 5.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                Text("路线卡", color = SageMuted, fontSize = 9.sp)
+            }
+            RouteVisualBoard(
+                title = routeTitle,
+                metrics = result.metrics.take(3).map { it.title to it.detail }.ifEmpty {
+                    listOf("阴凉" to "树荫优先", "座椅" to "3 处", "路程" to "约 12 分")
+                },
+                alternative = choice == RouteChoice.ALTERNATIVE,
+                modifier = Modifier.fillMaxWidth().padding(top = 9.dp),
             )
-            Text(result.summary, color = SageMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 7.dp))
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RouteChoiceCard(
-                    title = "推荐路线",
+                    title = "林荫",
                     detail = "湖边林荫线",
                     selected = choice == RouteChoice.RECOMMENDED,
                     accent = SageGreen,
@@ -1054,7 +1102,7 @@ private fun RouteResultPanel(
                     modifier = Modifier.weight(1f),
                 )
                 RouteChoiceCard(
-                    title = "备选路线",
+                    title = "外环",
                     detail = "草坪外环线",
                     selected = choice == RouteChoice.ALTERNATIVE,
                     accent = SageOchre,
@@ -1065,26 +1113,23 @@ private fun RouteResultPanel(
             if (full) {
                 Surface(
                     color = SageWarningSurface,
-                    shape = RoundedCornerShape(13.dp),
-                    modifier = Modifier.padding(top = 9.dp),
+                    shape = RoundedCornerShape(100.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 ) {
-                    Text(
-                        result.uncertainty.orEmpty(),
-                        color = Color(0xFF805024),
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp),
-                    )
+                    Row(Modifier.padding(horizontal = 11.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Info, null, tint = Color(0xFFB56B2C), modifier = Modifier.size(14.dp))
+                        Text(
+                            result.uncertainty.orEmpty(),
+                            color = Color(0xFF805024),
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 6.dp),
+                        )
+                    }
                 }
             }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-            ) {
-                result.metrics.forEach { metric ->
-                    MetricCard(metric.title, metric.detail, Modifier.weight(1f))
-                }
-            }
-            Button(onClick = onAdopt, modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(54.dp), shape = RoundedCornerShape(17.dp)) {
+            Button(onClick = onAdopt, modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp), shape = RoundedCornerShape(18.dp)) {
                 Text(result.primaryAction, fontSize = 16.sp, color = Color.White)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -1099,6 +1144,55 @@ private fun RouteResultPanel(
                     fontSize = 11.sp,
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteVisualBoard(
+    title: String,
+    metrics: List<Pair<String, String>>,
+    alternative: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val accent = if (alternative) SageOchre else SageGreenDark
+    Surface(color = accent.copy(alpha = .10f), shape = sageBubbleShape(if (alternative) 5 else 2), modifier = modifier) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 11.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(color = accent, contentColor = Color.White, shape = CircleShape) {
+                    Icon(Icons.AutoMirrored.Filled.AltRoute, null, modifier = Modifier.padding(7.dp).size(16.dp))
+                }
+                Column(Modifier.padding(start = 9.dp).weight(1f)) {
+                    Text(title, color = SageInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(if (alternative) "开阔外环" else "树荫 · 座椅 · 短路程", color = SageMuted, fontSize = 10.sp)
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(74.dp).padding(top = 5.dp)) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val path = Path().apply {
+                        moveTo(size.width * .05f, size.height * .70f)
+                        cubicTo(size.width * .25f, size.height * .10f, size.width * .53f, size.height * .85f, size.width * .94f, size.height * .28f)
+                    }
+                    drawPath(path, Color.White.copy(alpha = .94f), style = Stroke(12f, cap = StrokeCap.Round))
+                    drawPath(path, accent, style = Stroke(5.5f, cap = StrokeCap.Round))
+                }
+                val positions = listOf(Alignment.BottomStart, Alignment.Center, Alignment.TopEnd)
+                val symbols = listOf("☀", "⌑", "↗")
+                metrics.take(3).forEachIndexed { index, metric ->
+                    Surface(
+                        color = Color.White.copy(alpha = .94f),
+                        shape = CircleShape,
+                        shadowElevation = 3.dp,
+                        modifier = Modifier.align(positions[index]).size(52.dp),
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text(symbols[index], color = accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text(metric.first, color = SageInk, fontSize = 8.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(metric.second, color = SageMuted, fontSize = 7.sp, maxLines = 1)
+                        }
+                    }
+                }
             }
         }
     }
@@ -2078,7 +2172,7 @@ private fun JourneyRoutePanel(
                         JourneyMaterialSummary(
                             icon = Icons.AutoMirrored.Filled.AltRoute,
                             title = if (routeReplanned) "$replanCount 次路线调整" else "$replanCount 次重规划建议",
-                            detail = if (routeReplanned) "未走旧路变灰 · 新路线续行" else "橙色虚线为比较过但未采用的方案",
+                            detail = if (routeReplanned) "节点已落在当前高德路线" else "建议已记录 · 不叠加虚拟线路",
                             accent = SageOchre,
                             modifier = Modifier.weight(1f),
                         )
@@ -2135,171 +2229,29 @@ private fun JourneyRouteMap(
     onSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var entered by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { entered = true }
-    val reveal by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (entered) 1f else .02f,
-        animationSpec = tween(1250),
-        label = "finalJourneyRouteReveal",
-    )
-    val selectedPulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "selectedJourneyPulse")
-    val pulse by selectedPulse.animateFloat(
-        initialValue = .88f,
-        targetValue = 1.10f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = tween(1050),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
-        ),
-        label = "selectedJourneyNodePulse",
-    )
     Box(modifier.clip(sageBubbleShape(6)).background(Color(0xFFE4ECE6))) {
         AmapParkMap(
-            contentDescription = "本次步行路线图",
-            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = .38f },
+            contentDescription = "本次高德真实步行路线与沿途节点",
+            modifier = Modifier.fillMaxSize(),
             selectedAlternative = routeReplanned || adoptedRoute == RouteChoice.ALTERNATIVE,
+            showAlternativeRoutes = false,
+            journeyPhotoUris = moments.map(JourneyPhotoMoment::photoUri),
+            journeyVoiceCount = voiceCount,
+            journeyReplanCount = replanCount,
+            selectedJourneyPhotoIndex = selectedIndex,
+            onJourneyPhotoSelected = onSelected,
             gesturesEnabled = false,
         )
-        Box(Modifier.fillMaxSize().background(Color(0xFFFFFBF2).copy(alpha = .25f)))
-        Canvas(Modifier.fillMaxSize()) {
-            val fullPath = journeyRoutePath(size, routeReplanned, adoptedRoute)
-            val measure = PathMeasure().apply { setPath(fullPath, false) }
-            drawPath(fullPath, Color.White.copy(alpha = .96f), style = Stroke(width = 15f, cap = StrokeCap.Round))
-            if (routeReplanned) {
-                val oldRoute = journeyRoutePath(size, false, adoptedRoute)
-                val oldMeasure = PathMeasure().apply { setPath(oldRoute, false) }
-                drawPath(oldRoute, Color.White.copy(alpha = .92f), style = Stroke(width = 14f, cap = StrokeCap.Round))
-                val oldUnused = Path()
-                oldMeasure.getSegment(oldMeasure.length * .52f, oldMeasure.length, oldUnused, true)
-                drawPath(oldUnused, Color(0xFF9EA7A2).copy(alpha = .72f), style = Stroke(width = 7f, cap = StrokeCap.Round))
-
-                val active = Path()
-                measure.getSegment(0f, measure.length * reveal, active, true)
-                drawPath(active, Color.White.copy(alpha = .94f), style = Stroke(width = 13f, cap = StrokeCap.Round))
-                drawPath(active, SageGreenDark, style = Stroke(width = 7f, cap = StrokeCap.Round))
-            } else {
-                val segment = Path()
-                measure.getSegment(0f, measure.length * reveal, segment, true)
-                drawPath(segment, SageGreenDark, style = Stroke(width = 8f, cap = StrokeCap.Round))
-
-                if (replanCount > 0) {
-                    val proposedRoute = journeyRoutePath(size, true, adoptedRoute)
-                    val proposedMeasure = PathMeasure().apply { setPath(proposedRoute, false) }
-                    val proposedBranch = Path()
-                    proposedMeasure.getSegment(
-                        proposedMeasure.length * .52f,
-                        proposedMeasure.length,
-                        proposedBranch,
-                        true,
-                    )
-                    drawPath(
-                        proposedBranch,
-                        Color.White.copy(alpha = .90f),
-                        style = Stroke(width = 12f, cap = StrokeCap.Round),
-                    )
-                    drawPath(
-                        proposedBranch,
-                        SageOchre.copy(alpha = .88f),
-                        style = Stroke(
-                            width = 6f,
-                            cap = StrokeCap.Round,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(15f, 10f)),
-                        ),
-                    )
-                }
-            }
-            drawCircle(SageGreenDark, 9f, Offset(size.width * .06f, size.height * .82f))
-            drawCircle(Color.White, 4f, Offset(size.width * .06f, size.height * .82f))
-            drawCircle(SageGreenDark, 10f, Offset(size.width * .93f, size.height * .24f))
-        }
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val density = LocalDensity.current
-            val canvasSize = with(density) { androidx.compose.ui.geometry.Size(maxWidth.toPx(), maxHeight.toPx()) }
-            val activeMeasure = PathMeasure().apply { setPath(journeyRoutePath(canvasSize, routeReplanned, adoptedRoute), false) }
-            val compactNodes = moments.size > 6
-            val nodeSize = if (compactNodes) 48.dp else 62.dp
-            moments.take(8).forEachIndexed { index, moment ->
-                val visibleCount = moments.take(8).size
-                val fraction = if (visibleCount == 1) .18f else .14f + index * (.70f / (visibleCount - 1).coerceAtLeast(1))
-                val point = activeMeasure.getPosition(activeMeasure.length * fraction.coerceIn(.10f, .88f))
-                val x = with(density) { point.x.toDp() } - nodeSize / 2
-                val y = with(density) { point.y.toDp() } - nodeSize / 2
-                JourneyPhotoNode(
-                    moment = moment,
-                    index = index,
-                    selected = index == selectedIndex,
-                    selectedPulse = pulse,
-                    compact = compactNodes,
-                    onClick = { onSelected(index) },
-                    modifier = Modifier.offset(x = x, y = y),
-                )
-            }
-            repeat(voiceCount.coerceAtMost(6)) { index ->
-                val visibleVoiceCount = voiceCount.coerceAtMost(6)
-                val fraction = if (visibleVoiceCount == 1) .48f else .30f + index * (.50f / (visibleVoiceCount - 1).coerceAtLeast(1))
-                val point = activeMeasure.getPosition(activeMeasure.length * fraction.coerceIn(.26f, .84f))
-                val x = with(density) { point.x.toDp() } - 17.dp
-                // 语音节点贴在路线正上方，避免和较大的照片节点互相遮挡。
-                val y = with(density) { point.y.toDp() } - 45.dp
-                Surface(
-                    color = Color(0xFF4E718B),
-                    contentColor = Color.White,
-                    shape = CircleShape,
-                    shadowElevation = 5.dp,
-                    modifier = Modifier.offset(x = x, y = y).size(34.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Mic, "第 ${index + 1} 次语音节点", modifier = Modifier.padding(8.dp))
-                        Text("${index + 1}", color = Color.White, fontSize = 7.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopEnd).padding(top = 1.dp, end = 3.dp))
-                    }
-                }
-            }
-            if (replanCount > 0) {
-                Surface(
-                    color = if (routeReplanned) SageOchre else SageOchre.copy(alpha = .78f),
-                    contentColor = Color.White,
-                    shape = CircleShape,
-                    shadowElevation = 5.dp,
-                    modifier = Modifier.offset(x = maxWidth * .68f, y = maxHeight * .56f).size(36.dp),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.AltRoute,
-                        if (routeReplanned) "已采用重规划节点" else "未采用重规划建议节点",
-                        modifier = Modifier.padding(8.dp),
-                    )
-                }
-            }
-        }
         Surface(color = SageGreenDark.copy(alpha = .92f), shape = RoundedCornerShape(10.dp), modifier = Modifier.align(Alignment.TopStart).padding(10.dp)) {
             Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(6.dp).background(Color(0xFF9DE0B6), CircleShape))
                 Text(
-                    "${when { routeReplanned -> "林下连廊绕行线"; adoptedRoute == RouteChoice.ALTERNATIVE -> "草坪外环线"; else -> "湖边林荫线" }} · ${moments.size} 照片 · $voiceCount 语音 · $replanCount 次重规划",
+                    "高德真实路线 · ${moments.size} 照片 · $voiceCount 语音 · $replanCount 次调整",
                     color = Color.White,
                     fontSize = 9.sp,
                     modifier = Modifier.padding(start = 6.dp),
                 )
             }
-        }
-    }
-}
-
-private fun journeyRoutePath(
-    size: androidx.compose.ui.geometry.Size,
-    routeReplanned: Boolean,
-    adoptedRoute: RouteChoice,
-): Path = Path().apply {
-    moveTo(size.width * .06f, size.height * .82f)
-    when {
-        routeReplanned -> {
-            cubicTo(size.width * .18f, size.height * .48f, size.width * .35f, size.height * .70f, size.width * .49f, size.height * .52f)
-            cubicTo(size.width * .63f, size.height * .72f, size.width * .82f, size.height * .58f, size.width * .93f, size.height * .24f)
-        }
-        adoptedRoute == RouteChoice.ALTERNATIVE -> {
-            cubicTo(size.width * .24f, size.height * .88f, size.width * .64f, size.height * .78f, size.width * .93f, size.height * .24f)
-        }
-        else -> {
-            cubicTo(size.width * .18f, size.height * .48f, size.width * .35f, size.height * .70f, size.width * .49f, size.height * .52f)
-            cubicTo(size.width * .62f, size.height * .35f, size.width * .71f, size.height * .13f, size.width * .93f, size.height * .24f)
         }
     }
 }
@@ -2326,43 +2278,6 @@ private fun JourneyMaterialSummary(
             Column(Modifier.padding(start = 9.dp)) {
                 Text(title, color = SageInk, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 Text(detail, color = SageMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun JourneyPhotoNode(
-    moment: JourneyPhotoMoment,
-    index: Int,
-    selected: Boolean,
-    selectedPulse: Float,
-    compact: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    Box(
-        modifier
-            .size(if (compact) 48.dp else 62.dp)
-            .graphicsLayer {
-                val scale = if (selected) selectedPulse else if (pressed) .92f else 1f
-                scaleX = scale
-                scaleY = scale
-            }
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (selected) Box(Modifier.matchParentSize().background(SageGreen.copy(alpha = .22f), CircleShape))
-        JourneyPhotoImage(
-            rawUri = moment.photoUri,
-            contentDescription = "第 ${index + 1} 个照片节点：${moment.label}",
-            modifier = Modifier.size(if (compact) 40.dp else 52.dp).border(if (selected) 4.dp else 3.dp, if (selected) SageGreenDark else Color.White, CircleShape),
-        )
-        if (moment.questions.isNotEmpty()) {
-            Surface(color = SageOchre, shape = CircleShape, modifier = Modifier.align(Alignment.TopEnd)) {
-                Text(moment.questions.size.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
             }
         }
     }

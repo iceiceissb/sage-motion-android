@@ -1,6 +1,8 @@
 package cn.tsinghua.sagemotion.ui.components
 
 import android.graphics.BitmapFactory
+import android.graphics.Color as AndroidColor
+import android.content.Context
 import android.net.Uri
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -46,6 +48,7 @@ import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -70,6 +73,75 @@ import cn.tsinghua.sagemotion.ui.theme.SagePaper
 import cn.tsinghua.sagemotion.ui.theme.SagePaperEdge
 import cn.tsinghua.sagemotion.ui.theme.SagePaperShade
 import kotlin.math.sin
+
+private enum class SceneMotif { BOTANICAL, SCREEN, WATER, ARCHITECTURE, HUMAN, GENERAL }
+
+private fun sceneMotifFor(label: String): SceneMotif {
+    val normalized = label.lowercase()
+    return when {
+        listOf("flower", "plant", "leaf", "rose", "花", "草", "叶", "月季", "蔷薇").any(normalized::contains) -> SceneMotif.BOTANICAL
+        listOf("phone", "mobile", "television", "screen", "tv", "手机", "电视", "屏幕", "显示器").any(normalized::contains) -> SceneMotif.SCREEN
+        listOf("water", "lake", "river", "pond", "湖", "河", "水", "池").any(normalized::contains) -> SceneMotif.WATER
+        listOf("building", "room", "gate", "bridge", "建筑", "房间", "门", "桥", "亭").any(normalized::contains) -> SceneMotif.ARCHITECTURE
+        listOf("person", "people", "human", "人", "游客", "儿童").any(normalized::contains) -> SceneMotif.HUMAN
+        else -> SceneMotif.GENERAL
+    }
+}
+
+private fun sceneMotifForPhoto(context: Context, rawUri: String, label: String): SceneMotif {
+    val semantic = sceneMotifFor(label)
+    val bitmap = runCatching {
+        val uri = Uri.parse(rawUri)
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        while (bounds.outWidth / sample > 140 || bounds.outHeight / sample > 140) sample *= 2
+        context.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+        }
+    }.getOrNull() ?: return semantic
+
+    var pixels = 0
+    var pink = 0
+    var green = 0
+    var blue = 0
+    var dark = 0
+    val stride = 2
+    for (y in 0 until bitmap.height step stride) {
+        for (x in 0 until bitmap.width step stride) {
+            val pixel = bitmap.getPixel(x, y)
+            val red = AndroidColor.red(pixel)
+            val g = AndroidColor.green(pixel)
+            val b = AndroidColor.blue(pixel)
+            pixels++
+            if (red > 135 && red > g * 1.22f && b > g * .72f) pink++
+            if (g > 70 && g > red * .78f && g > b * 1.12f) green++
+            if (b > 110 && b > red * 1.16f && b > g * 1.08f) blue++
+            if (red + g + b < 150) dark++
+        }
+    }
+    if (pixels == 0) return semantic
+    val pinkRatio = pink.toFloat() / pixels
+    val greenRatio = green.toFloat() / pixels
+    val blueRatio = blue.toFloat() / pixels
+    val darkRatio = dark.toFloat() / pixels
+    return when {
+        pinkRatio > .012f && greenRatio > .12f -> SceneMotif.BOTANICAL
+        semantic == SceneMotif.SCREEN -> SceneMotif.SCREEN
+        semantic == SceneMotif.BOTANICAL -> SceneMotif.BOTANICAL
+        blueRatio > .20f && darkRatio > .08f -> SceneMotif.SCREEN
+        else -> semantic
+    }
+}
+
+private fun SceneMotif.microText(): String = when (this) {
+    SceneMotif.BOTANICAL -> "Petals after rain"
+    SceneMotif.SCREEN -> "Blue light, quiet room"
+    SceneMotif.WATER -> "Water holds the light"
+    SceneMotif.ARCHITECTURE -> "Edges remember the room"
+    SceneMotif.HUMAN -> "A quiet passing figure"
+    SceneMotif.GENERAL -> "Something caught the eye"
+}
 
 /**
  * 本次旅程的可选元数据，对应设计建议里列出的
@@ -249,6 +321,10 @@ private fun GatheredScenesField(
 ) {
     val activeIndex = selectedIndex.coerceIn(0, moments.lastIndex.coerceAtLeast(0))
     val moment = moments.getOrNull(activeIndex)
+    val context = LocalContext.current
+    val motif = remember(moment?.photoUri, moment?.label) {
+        sceneMotifForPhoto(context, moment?.photoUri.orEmpty(), moment?.label.orEmpty())
+    }
     val cobalt = Color(0xFF2857C5)
     BoxWithConstraints(
         modifier
@@ -259,80 +335,7 @@ private fun GatheredScenesField(
             ) { onMomentSelected((activeIndex + 1) % moments.size) },
     ) {
         Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = reveal }) {
-            // 右侧只保留一个大尺度植物剪影。密集叶片被压缩成少数安静形体，
-            // 让真实照片和纸面留白成为主角。
-            val stem = Path().apply {
-                moveTo(size.width * .58f, size.height * .92f)
-                cubicTo(size.width * .67f, size.height * .72f, size.width * .63f, size.height * .48f, size.width * .76f, size.height * .24f)
-            }
-            drawPath(stem, Color(0xFF74794B), style = Stroke(15.dp.toPx(), cap = StrokeCap.Round))
-            listOf(
-                Triple(Offset(size.width * .55f, size.height * .72f), Size(size.width * .33f, size.height * .15f), -24f),
-                Triple(Offset(size.width * .70f, size.height * .55f), Size(size.width * .28f, size.height * .14f), 22f),
-                Triple(Offset(size.width * .52f, size.height * .42f), Size(size.width * .30f, size.height * .13f), -28f),
-                Triple(Offset(size.width * .73f, size.height * .32f), Size(size.width * .23f, size.height * .11f), 24f),
-            ).forEach { (center, leafSize, angle) ->
-                rotate(angle, center) {
-                    val leaf = Path().apply {
-                        moveTo(center.x - leafSize.width * .50f, center.y)
-                        cubicTo(
-                            center.x - leafSize.width * .12f,
-                            center.y - leafSize.height * .72f,
-                            center.x + leafSize.width * .28f,
-                            center.y - leafSize.height * .48f,
-                            center.x + leafSize.width * .50f,
-                            center.y,
-                        )
-                        cubicTo(
-                            center.x + leafSize.width * .18f,
-                            center.y + leafSize.height * .46f,
-                            center.x - leafSize.width * .20f,
-                            center.y + leafSize.height * .50f,
-                            center.x - leafSize.width * .50f,
-                            center.y,
-                        )
-                        close()
-                    }
-                    drawPath(leaf, Color(0xFF8A8D5C))
-                    drawLine(
-                        Color(0xFF74794B).copy(alpha = .58f),
-                        Offset(center.x - leafSize.width * .38f, center.y),
-                        Offset(center.x + leafSize.width * .42f, center.y),
-                        1.dp.toPx(),
-                    )
-                }
-            }
-            val flowerCenter = Offset(size.width * .76f, size.height * .20f)
-            repeat(5) { index ->
-                rotate(index * 72f, flowerCenter) {
-                    drawOval(
-                        Color(0xFFC96D83),
-                        topLeft = Offset(flowerCenter.x - size.width * .027f, flowerCenter.y - size.width * .10f),
-                        size = Size(size.width * .054f, size.width * .105f),
-                    )
-                }
-            }
-            drawCircle(Color(0xFFE8B49A), size.width * .026f, flowerCenter)
-
-            // 钴蓝色不是装饰线，而是一条跨过照片—纸面边界的宽结构通道。
-            val cobaltPassage = Path().apply {
-                moveTo(-size.width * .08f, size.height * .94f)
-                cubicTo(size.width * .13f, size.height * .84f, size.width * .31f, size.height * .73f, size.width * .48f, size.height * .63f)
-                lineTo(size.width * .58f, size.height * .71f)
-                cubicTo(size.width * .36f, size.height * .84f, size.width * .18f, size.height * .97f, -size.width * .05f, size.height * 1.07f)
-                close()
-            }
-            drawPath(cobaltPassage, cobalt.copy(alpha = .91f))
-
-            val walkingTrace = Path().apply {
-                moveTo(size.width * .20f, size.height * 1.02f)
-                cubicTo(size.width * .48f, size.height * .89f, size.width * .63f, size.height * .58f, size.width * .82f, -size.height * .02f)
-            }
-            drawPath(
-                walkingTrace,
-                Color(0xFF2F3028).copy(alpha = .82f),
-                style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 7f))),
-            )
+            drawGatheredSceneMotif(motif, cobalt)
         }
 
         if (moment != null) {
@@ -354,7 +357,7 @@ private fun GatheredScenesField(
         }
 
         Text(
-            "Petals after rain",
+            motif.microText(),
             color = SageInk.copy(alpha = .62f),
             fontSize = 9.sp,
             letterSpacing = 1.0.sp,
@@ -375,6 +378,195 @@ private fun GatheredScenesField(
             }
         }
     }
+}
+
+/**
+ * 根据当前照片的端侧语义标签选择唯一的插画语法。
+ * 这不是把同一朵花套在所有照片上：屏幕、植物、水面、建筑与人物各自使用不同的大形体，
+ * 同时保留 skill 要求的真实照片锚点、安静留白、单一钴蓝结构色和撕纸边界。
+ */
+private fun DrawScope.drawGatheredSceneMotif(motif: SceneMotif, cobalt: Color) {
+    val quiet = Color(0xFFB8B1A4)
+    val olive = Color(0xFF7D8058)
+    val charcoal = Color(0xFF34342F)
+    when (motif) {
+        SceneMotif.SCREEN -> {
+            // 对应电视/手机照片：倾斜屏幕、室内墙面和光束，而不是植物模板。
+            drawPath(
+                Path().apply {
+                    moveTo(size.width * .28f, size.height * .38f)
+                    lineTo(size.width * .88f, size.height * .25f)
+                    lineTo(size.width * .66f, size.height * .68f)
+                    lineTo(size.width * .20f, size.height * .57f)
+                    close()
+                },
+                quiet.copy(alpha = .62f),
+            )
+            drawLine(
+                charcoal,
+                Offset(size.width * .80f, size.height * .17f),
+                Offset(size.width * .61f, size.height * .80f),
+                7.dp.toPx(),
+                StrokeCap.Square,
+            )
+            drawPath(
+                Path().apply {
+                    moveTo(-size.width * .10f, size.height * .98f)
+                    lineTo(size.width * .48f, size.height * .61f)
+                    lineTo(size.width * .60f, size.height * .70f)
+                    lineTo(size.width * .13f, size.height * 1.08f)
+                    close()
+                },
+                cobalt.copy(alpha = .94f),
+            )
+            drawPath(
+                Path().apply {
+                    moveTo(size.width * .48f, size.height * .65f)
+                    lineTo(size.width * .91f, size.height * .58f)
+                    lineTo(size.width * .76f, size.height * .73f)
+                    close()
+                },
+                olive.copy(alpha = .90f),
+            )
+        }
+
+        SceneMotif.BOTANICAL -> {
+            val stem = Path().apply {
+                moveTo(size.width * .60f, size.height * .94f)
+                cubicTo(size.width * .69f, size.height * .70f, size.width * .62f, size.height * .49f, size.width * .77f, size.height * .22f)
+            }
+            drawPath(stem, olive, style = Stroke(14.dp.toPx(), cap = StrokeCap.Round))
+            listOf(
+                Triple(Offset(size.width * .58f, size.height * .70f), Size(size.width * .34f, size.height * .15f), -24f),
+                Triple(Offset(size.width * .70f, size.height * .48f), Size(size.width * .30f, size.height * .14f), 22f),
+                Triple(Offset(size.width * .62f, size.height * .34f), Size(size.width * .28f, size.height * .12f), -26f),
+            ).forEach { (center, leafSize, angle) ->
+                rotate(angle, center) {
+                    drawOval(
+                        olive.copy(alpha = .88f),
+                        Offset(center.x - leafSize.width / 2f, center.y - leafSize.height / 2f),
+                        leafSize,
+                    )
+                }
+            }
+            val flowerCenter = Offset(size.width * .77f, size.height * .20f)
+            repeat(5) { index ->
+                rotate(index * 72f, flowerCenter) {
+                    drawOval(
+                        Color(0xFFC87986),
+                        Offset(flowerCenter.x - size.width * .026f, flowerCenter.y - size.width * .095f),
+                        Size(size.width * .052f, size.width * .10f),
+                    )
+                }
+            }
+            drawCircle(Color(0xFFE0B29B), size.width * .025f, flowerCenter)
+            drawPath(
+                Path().apply {
+                    moveTo(-size.width * .08f, size.height * .96f)
+                    cubicTo(size.width * .14f, size.height * .86f, size.width * .33f, size.height * .73f, size.width * .52f, size.height * .63f)
+                    lineTo(size.width * .61f, size.height * .72f)
+                    cubicTo(size.width * .38f, size.height * .87f, size.width * .17f, size.height * 1.01f, -size.width * .06f, size.height * 1.08f)
+                    close()
+                },
+                cobalt.copy(alpha = .92f),
+            )
+        }
+
+        SceneMotif.WATER -> {
+            repeat(3) { index ->
+                val y = size.height * (.42f + index * .13f)
+                drawPath(
+                    Path().apply {
+                        moveTo(size.width * .30f, y)
+                        cubicTo(size.width * .48f, y - size.height * .06f, size.width * .69f, y + size.height * .05f, size.width * .96f, y - size.height * .02f)
+                    },
+                    if (index == 1) cobalt else quiet.copy(alpha = .74f),
+                    style = Stroke((if (index == 1) 12 else 8).dp.toPx(), cap = StrokeCap.Round),
+                )
+            }
+            drawCircle(olive.copy(alpha = .72f), size.width * .10f, Offset(size.width * .75f, size.height * .23f))
+        }
+
+        SceneMotif.ARCHITECTURE -> {
+            drawPath(
+                Path().apply {
+                    moveTo(size.width * .47f, size.height * .78f)
+                    lineTo(size.width * .48f, size.height * .31f)
+                    lineTo(size.width * .72f, size.height * .18f)
+                    lineTo(size.width * .94f, size.height * .36f)
+                    lineTo(size.width * .91f, size.height * .82f)
+                    close()
+                },
+                quiet.copy(alpha = .70f),
+            )
+            repeat(3) { index ->
+                drawRect(
+                    if (index == 1) cobalt else olive.copy(alpha = .78f),
+                    Offset(size.width * (.57f + index * .10f), size.height * .42f),
+                    Size(size.width * .065f, size.height * .18f),
+                )
+            }
+            drawLine(charcoal, Offset(size.width * .43f, size.height * .80f), Offset(size.width * .95f, size.height * .80f), 3.dp.toPx())
+        }
+
+        SceneMotif.HUMAN -> {
+            drawCircle(quiet.copy(alpha = .78f), size.width * .075f, Offset(size.width * .75f, size.height * .30f))
+            drawPath(
+                Path().apply {
+                    moveTo(size.width * .75f, size.height * .37f)
+                    cubicTo(size.width * .62f, size.height * .52f, size.width * .68f, size.height * .70f, size.width * .58f, size.height * .89f)
+                    moveTo(size.width * .72f, size.height * .53f)
+                    lineTo(size.width * .91f, size.height * .63f)
+                    moveTo(size.width * .67f, size.height * .66f)
+                    lineTo(size.width * .82f, size.height * .91f)
+                },
+                olive,
+                style = Stroke(13.dp.toPx(), cap = StrokeCap.Round),
+            )
+            drawPath(
+                Path().apply {
+                    moveTo(-size.width * .08f, size.height * .92f)
+                    lineTo(size.width * .58f, size.height * .67f)
+                    lineTo(size.width * .65f, size.height * .78f)
+                    lineTo(size.width * .04f, size.height * 1.04f)
+                    close()
+                },
+                cobalt.copy(alpha = .92f),
+            )
+        }
+
+        SceneMotif.GENERAL -> {
+            drawPath(
+                Path().apply {
+                    moveTo(size.width * .46f, size.height * .27f)
+                    cubicTo(size.width * .76f, size.height * .16f, size.width * .95f, size.height * .42f, size.width * .84f, size.height * .69f)
+                    cubicTo(size.width * .73f, size.height * .88f, size.width * .48f, size.height * .78f, size.width * .39f, size.height * .57f)
+                    close()
+                },
+                olive.copy(alpha = .72f),
+            )
+            drawPath(
+                Path().apply {
+                    moveTo(-size.width * .06f, size.height * .94f)
+                    cubicTo(size.width * .20f, size.height * .85f, size.width * .40f, size.height * .74f, size.width * .64f, size.height * .57f)
+                    lineTo(size.width * .71f, size.height * .67f)
+                    cubicTo(size.width * .44f, size.height * .86f, size.width * .20f, size.height * 1.01f, -size.width * .08f, size.height * 1.06f)
+                    close()
+                },
+                cobalt.copy(alpha = .92f),
+            )
+        }
+    }
+
+    // 一条安静的手绘轨迹把照片和插画组织成同一页，不冒充地图路线。
+    drawPath(
+        Path().apply {
+            moveTo(size.width * .20f, size.height * 1.02f)
+            cubicTo(size.width * .47f, size.height * .90f, size.width * .66f, size.height * .55f, size.width * .83f, -size.height * .02f)
+        },
+        charcoal.copy(alpha = .80f),
+        style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 7f))),
+    )
 }
 
 @Composable

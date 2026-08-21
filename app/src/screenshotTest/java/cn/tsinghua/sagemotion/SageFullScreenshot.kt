@@ -229,7 +229,7 @@ fun SageCreationWeavingScreenshot() {
 }
 
 private fun sampleJourneyMoments() = listOf(
-    JourneyPhotoMoment("", "湖边拱桥", listOf(JourneyQuestion("它有什么特点？", "曲线桥身和水面倒影形成了清晰的空间层次。"))),
+    JourneyPhotoMoment("", "粉红色月季或蔷薇类花卉", listOf(JourneyQuestion("它有什么特点？", "粉色花瓣与深绿色复叶形成了鲜明的色彩层次。"))),
     JourneyPhotoMoment("", "林下植物", listOf(JourneyQuestion("这是什么？", "较可能是适应林下光照环境的常见观赏植物。"), JourneyQuestion("为什么种在这里？", "这里湿度和遮阴条件更适合它生长。"))),
     JourneyPhotoMoment("", "休息平台", emptyList()),
 )
@@ -284,7 +284,7 @@ fun JourneyProposedReplanScreenshot() {
                 voiceTranscripts = listOf("附近哪里有好吃的？"),
                 replanCount = 1,
                 routeReplanned = false,
-                taskResult = AiTaskResult("知识游记已生成", "路线、照片与沿途问题已经串联完成。", "橙色虚线表示比较过但未采用的改道建议", "完成本次体验", listOf("路线记录", "照片问答")),
+                taskResult = AiTaskResult("知识游记已生成", "路线、照片与沿途问题已经串联完成。", "未采用建议仅保留记录，不叠加虚拟路线", "完成本次体验", listOf("路线记录", "照片问答")),
             ),
             onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
             onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
