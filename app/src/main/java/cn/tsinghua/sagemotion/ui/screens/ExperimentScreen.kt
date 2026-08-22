@@ -589,7 +589,7 @@ private fun RouteExperiment(
             modifier = Modifier.fillMaxSize(),
             selectedAlternative = state.selectedRoute == RouteChoice.ALTERNATIVE,
             routeEnabled = state.isRunning || state.resultVisible,
-            showRouteSummary = state.isRunning || state.resultVisible,
+            showRouteSummary = false,
         )
         Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.20f)))
 
@@ -605,9 +605,7 @@ private fun RouteExperiment(
                     AiStatusPanel(state = state, onLongPress = onResearcherPanel, onCancel = onCancel)
                 }
             }
-            if (state.resultVisible) {
-                RoutePreferenceBubbles(state.routePreferenceIds)
-            } else {
+            if (!state.resultVisible) {
                 PromptBubble(
                     text = if (state.isRunning) {
                         "正在把偏好与园路条件放到一起比较"
@@ -655,43 +653,6 @@ private fun RouteExperiment(
                     onEvidence = onEvidence,
                     onReset = onReset,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RoutePreferenceBubbles(ids: Set<String>) {
-    val options = listOf(
-        Triple("shade", "☘", "阴凉"),
-        Triple("rest", "⌑", "座椅"),
-        Triple("short", "↗", "短程"),
-        Triple("quiet", "◌", "安静"),
-    ).filter { ids.isEmpty() || it.first in ids }
-    Surface(
-        color = Color.White.copy(alpha = .88f),
-        shape = sageBubbleShape(3),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .92f)),
-        shadowElevation = 3.dp,
-        modifier = Modifier.padding(top = 10.dp),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("本次偏好", color = SageMuted, fontSize = 9.sp)
-            options.take(4).forEachIndexed { index, (_, glyph, label) ->
-                val accent = if (index % 2 == 0) SageGreenDark else SageOchre
-                Surface(color = accent.copy(alpha = .12f), shape = CircleShape, modifier = Modifier.weight(1f)) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(vertical = 5.dp),
-                    ) {
-                        Text(glyph, color = accent, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Text(label, color = SageInk, fontSize = 8.sp, maxLines = 1)
-                    }
-                }
             }
         }
     }

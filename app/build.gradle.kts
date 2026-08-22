@@ -30,8 +30,8 @@ android {
         applicationId = "cn.tsinghua.sagemotion"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "1.14.0-real-route-zine"
+        versionCode = 25
+        versionName = "1.15.0-clean-result-motion"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")

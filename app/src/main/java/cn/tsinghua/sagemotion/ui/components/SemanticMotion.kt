@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import cn.tsinghua.sagemotion.model.AiStage
@@ -699,6 +700,8 @@ fun BreathingVoiceOrb(active: Boolean, stage: AiStage, modifier: Modifier = Modi
     val transition = rememberInfiniteTransition(label = "voiceOrb")
     val pulse by transition.animateFloat(.94f, 1.08f, infiniteRepeatable(tween(if (stage == AiStage.LISTENING) 720 else 1100), RepeatMode.Reverse), label = "pulse")
     val halo by transition.animateFloat(.18f, .48f, infiniteRepeatable(tween(1000), RepeatMode.Reverse), label = "halo")
+    val mascotLift by transition.animateFloat(-5f, 4f, infiniteRepeatable(tween(820), RepeatMode.Reverse), label = "mascotLift")
+    val mascotTilt by transition.animateFloat(-2.2f, 2.2f, infiniteRepeatable(tween(980), RepeatMode.Reverse), label = "mascotTilt")
     Box(modifier.size(112.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier.size(104.dp).scale(if (active) pulse + inputLevel * .10f else 1f).drawBehind {
@@ -722,7 +725,13 @@ fun BreathingVoiceOrb(active: Boolean, stage: AiStage, modifier: Modifier = Modi
         AnimatedMascot(
             mood = MascotMood.LISTENING,
             contentDescription = "银小叶正在倾听",
-            modifier = Modifier.size(82.dp),
+            loop = active,
+            modifier = Modifier
+                .size(82.dp)
+                .graphicsLayer {
+                    translationY = if (active) mascotLift.dp.toPx() else 0f
+                    rotationZ = if (active) mascotTilt else 0f
+                },
         )
     }
 }

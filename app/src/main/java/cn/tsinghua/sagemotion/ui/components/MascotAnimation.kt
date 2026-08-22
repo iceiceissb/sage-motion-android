@@ -36,7 +36,8 @@ enum class MascotMood(internal val spriteRow: Int, val description: String) {
  *
  * 使用 sprite sheet 而不是 GIF：Android 端可以保留完整 Alpha、按任务直接切换动作，
  * 同时避免 GIF 的 256 色限制和额外解码开销。角色只在进入场景或语义状态变化时
- * 播放一轮短动作，随后停在自然帧；不会常驻循环抢占地图注意力。
+ * 播放一轮短动作，随后停在自然帧；只有明确的处理中状态才通过 [loop] 持续动作，
+ * 不会常驻循环抢占地图注意力。
  * 截图测试固定在第二帧，保证回归图稳定。
  */
 @Composable
@@ -45,6 +46,7 @@ fun AnimatedMascot(
     modifier: Modifier = Modifier,
     contentDescription: String = mood.description,
     animate: Boolean = true,
+    loop: Boolean = false,
     @DrawableRes spriteRes: Int = R.drawable.ip_ginkgo_sprite_v2,
 ) {
     val context = LocalContext.current
@@ -53,16 +55,18 @@ fun AnimatedMascot(
         BitmapFactory.decodeResource(context.resources, spriteRes).asImageBitmap()
     }
     var frame by remember(mood) { mutableIntStateOf(1) }
-    LaunchedEffect(mood, animate, inspection) {
+    LaunchedEffect(mood, animate, loop, inspection) {
         if (!animate || inspection) {
             frame = 1
             return@LaunchedEffect
         }
-        // 两轮 4 帧约 1.4 秒：足以被感知，又不会变成一直抖动的装饰。
-        repeat(8) { index ->
-            frame = index % 4
-            delay(175)
-        }
+        do {
+            // 默认两轮 4 帧约 1.4 秒；处理中可循环，状态结束后协程会自动取消。
+            repeat(8) { index ->
+                frame = index % 4
+                delay(175)
+            }
+        } while (loop)
         frame = 1
     }
     val cellWidth = image.width / 4
