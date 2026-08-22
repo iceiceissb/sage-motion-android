@@ -1410,35 +1410,74 @@ private fun VisionFindingBubbleLayer(findings: List<VisionFinding>) {
     }
     val floatMotion = androidx.compose.animation.core.rememberInfiniteTransition(label = "findingFloat")
     val floatY by floatMotion.animateFloat(
-        initialValue = -4f,
-        targetValue = 5f,
+        initialValue = -3f,
+        targetValue = 4f,
         animationSpec = androidx.compose.animation.core.infiniteRepeatable(
             animation = tween(1700),
             repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
         ),
         label = "findingFloatY",
     )
-    val positions = listOf(.09f to .23f, .57f to .31f, .22f to .49f, .61f to .56f, .38f to .68f)
+    val inspection = LocalInspectionMode.current
+    val positions = listOf(.08f to .20f, .64f to .31f, .20f to .47f, .66f to .56f, .40f to .67f)
+    val bubbleColors = listOf(
+        Color(0xFFDDEEDC),
+        Color(0xFFFFE8D2),
+        Color(0xFFDDEAF4),
+        Color(0xFFF0E2F1),
+        Color(0xFFFFF0C9),
+    )
+    val accentColors = listOf(
+        Color(0xFF4A8C69),
+        Color(0xFFCB7B42),
+        Color(0xFF527E9F),
+        Color(0xFF936A96),
+        Color(0xFFC39834),
+    )
     BoxWithConstraints(Modifier.fillMaxSize().padding(top = 148.dp, bottom = 270.dp, start = 10.dp, end = 10.dp)) {
         visibleFindings.forEachIndexed { index, finding ->
-            val (xFactor, yFactor) = positions[index]
+            val (xFactor, yFactor) = positions[index % positions.size]
+            val bubbleSize = (78f + finding.confidence.coerceIn(.5f, 1f) * 16f).dp
+            val accent = accentColors[index % accentColors.size]
             Surface(
-                color = Color(0xFF13251F).copy(alpha = .86f),
-                shape = RoundedCornerShape(16.dp),
-                shadowElevation = 8.dp,
+                color = bubbleColors[index % bubbleColors.size].copy(alpha = .82f),
+                contentColor = SageInk,
+                shape = CircleShape,
+                shadowElevation = 4.dp,
                 modifier = Modifier
-                    .offset(x = (maxWidth - 132.dp) * xFactor, y = (maxHeight - 42.dp) * yFactor)
-                    .widthIn(max = 150.dp)
+                    .offset(x = (maxWidth - bubbleSize) * xFactor, y = (maxHeight - bubbleSize) * yFactor)
+                    .size(bubbleSize)
                     .graphicsLayer {
-                        translationY = floatY * if (index % 2 == 0) 1f else -.72f
-                    },
-            ) {
-                Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(7.dp).background(if (index == 0) Color(0xFF9DE0B6) else Color.White.copy(alpha = .72f), CircleShape))
-                    Column(Modifier.padding(start = 7.dp)) {
-                        Text(finding.label, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                        Text("${(finding.confidence * 100).toInt()}% · 语义候选", color = Color.White.copy(alpha = .62f), fontSize = 8.sp)
+                        translationY = if (inspection) 0f else floatY * if (index % 2 == 0) 1f else -.72f
                     }
+                    .border(1.dp, Color.White.copy(alpha = .88f), CircleShape),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Box(Modifier.size(18.dp)) {
+                        Box(Modifier.align(Alignment.Center).size(8.dp).background(accent, CircleShape))
+                        Box(Modifier.align(Alignment.TopStart).size(4.dp).background(accent.copy(alpha = .55f), CircleShape))
+                        Box(Modifier.align(Alignment.BottomEnd).size(4.dp).background(accent.copy(alpha = .42f), CircleShape))
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = finding.label,
+                        color = SageInk,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "${(finding.confidence * 100).toInt()}%",
+                        color = accent,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
                 }
             }
         }
@@ -2339,7 +2378,7 @@ private fun AdjustExperiment(
             modifier = Modifier.fillMaxSize(),
             // 在重规划任务中“推荐”代表新的绕行方案，“备选”才是保留旧路线。
             selectedAlternative = state.selectedRoute == RouteChoice.RECOMMENDED,
-            showRouteSummary = state.isRunning || state.resultVisible,
+            showRouteSummary = false,
         )
         Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .25f)))
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {

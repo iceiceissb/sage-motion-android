@@ -30,8 +30,8 @@ android {
         applicationId = "cn.tsinghua.sagemotion"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "1.15.0-clean-result-motion"
+        versionCode = 26
+        versionName = "1.16.0-clean-vision-bubbles"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
