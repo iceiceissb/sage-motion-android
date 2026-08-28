@@ -7,6 +7,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -45,6 +46,30 @@ val SageOpera = Color(0xFFA8453C)
 /** 手账胶带与节点编号的暖金色，同样只作装饰。 */
 val SageGold = Color(0xFFC08A2E)
 
+/** 田野志的结构色。只用于语音、标注和编辑结构，不扩散成第二品牌主色。 */
+val SageCobalt = Color(0xFF315FBE)
+
+/** 比品牌绿更接近墨色，用于纸面上的主动作、路线和大标题。 */
+val SageForestInk = Color(0xFF173D32)
+
+/** 纸面辅助文字，避免灰色与真实地图混在一起。 */
+val SagePaperMuted = Color(0xFF756F61)
+
+// ---- 数字公园信号层 ----
+/** 地图 HUD 的深墨底；只用于空间界面叠层，不替换真实高德底图。 */
+val SageHud = Color(0xFF08110F)
+val SageHudEdge = Color(0xFF52615A).copy(alpha = .70f)
+val SageHudMuted = Color(0xFFA9B4AE)
+
+/** 主行动、推荐路线与“正在感知”的唯一高能强调色。 */
+val SageSignalLime = Color(0xFFD8FF2F)
+
+/** 语音、声场和实时环境数据。 */
+val SageSignalCyan = Color(0xFF39DDD6)
+
+/** 备选路线、警示与重规划；不承担普通装饰。 */
+val SageSignalCoral = Color(0xFFFF7466)
+
 // ---- 开屏与天光 ----
 val SageSky = Color(0xFFCADCE2)
 val SageDawn = Color(0xFFE8D9C0)
@@ -79,10 +104,10 @@ private val SageColorScheme = lightColorScheme(
  * Study 1 显示 83.8% 的 AI 动效同时依赖文字辅助，因此文字层级与动效同等重要。
  */
 private val SageTypography = Typography(
-    displaySmall = TextStyle(fontSize = 30.sp, lineHeight = 38.sp, fontWeight = FontWeight.SemiBold, color = SageInk),
-    headlineMedium = TextStyle(fontSize = 24.sp, lineHeight = 31.sp, fontWeight = FontWeight.SemiBold, color = SageInk),
-    headlineSmall = TextStyle(fontSize = 21.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, color = SageInk),
-    titleLarge = TextStyle(fontSize = 19.sp, lineHeight = 25.sp, fontWeight = FontWeight.SemiBold, color = SageInk),
+    displaySmall = TextStyle(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.SansSerif, color = SageInk),
+    headlineMedium = TextStyle(fontSize = 25.sp, lineHeight = 31.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif, color = SageInk),
+    headlineSmall = TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif, color = SageInk),
+    titleLarge = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif, color = SageInk),
     titleMedium = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, color = SageInk),
     bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 22.sp, color = SageInk),
     bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp, color = SageInk),

@@ -18,6 +18,7 @@ import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -64,6 +69,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.tsinghua.sagemotion.BuildConfig
 import cn.tsinghua.sagemotion.R
+import cn.tsinghua.sagemotion.ui.theme.SageSignalCoral
+import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 import com.amap.api.location.AMapLocation
 import com.amap.api.location.AMapLocationClient
 import com.amap.api.location.AMapLocationClientOption
@@ -210,6 +217,13 @@ fun AmapParkMap(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
+            if (routeEnabled) {
+                PreviewFieldRouteOverlay(
+                    selectedAlternative = selectedAlternative,
+                    showAlternativeRoutes = showAlternativeRoutes,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             if (inspection && (showRouteSummary || guidanceControls)) {
                 ParkRouteStatusCard(
                     state = ParkRouteUiState(
@@ -371,6 +385,82 @@ fun AmapParkMap(
                         .widthIn(max = 218.dp)
                 },
             )
+        }
+    }
+}
+
+/**
+ * Preview 与无地图密钥状态下的确定性路线叠层。
+ * 真机联网时仍由高德原生 Polyline 绘制；这里让截图回归和离线演示保留相同的路线语义。
+ */
+@Composable
+private fun PreviewFieldRouteOverlay(
+    selectedAlternative: Boolean,
+    showAlternativeRoutes: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier) {
+        val recommended = Path().apply {
+            moveTo(size.width * .47f, size.height * .86f)
+            cubicTo(size.width * .34f, size.height * .76f, size.width * .29f, size.height * .66f, size.width * .36f, size.height * .56f)
+            cubicTo(size.width * .44f, size.height * .45f, size.width * .39f, size.height * .34f, size.width * .54f, size.height * .25f)
+            cubicTo(size.width * .62f, size.height * .20f, size.width * .65f, size.height * .16f, size.width * .72f, size.height * .13f)
+        }
+        val alternative = Path().apply {
+            moveTo(size.width * .47f, size.height * .86f)
+            cubicTo(size.width * .62f, size.height * .76f, size.width * .72f, size.height * .67f, size.width * .70f, size.height * .57f)
+            cubicTo(size.width * .68f, size.height * .45f, size.width * .80f, size.height * .34f, size.width * .73f, size.height * .24f)
+            cubicTo(size.width * .69f, size.height * .19f, size.width * .71f, size.height * .16f, size.width * .72f, size.height * .13f)
+        }
+        val selected = if (selectedAlternative) alternative else recommended
+        val compared = if (selectedAlternative) recommended else alternative
+        val selectedColor = if (selectedAlternative) SageSignalCoral else SageSignalLime
+        val comparedColor = if (selectedAlternative) SageSignalLime else SageSignalCoral
+        if (showAlternativeRoutes) {
+            drawPath(
+                compared,
+                color = Color.White.copy(alpha = .90f),
+                style = Stroke(width = 5.5.dp.toPx(), cap = StrokeCap.Round),
+            )
+            drawPath(
+                compared,
+                color = comparedColor.copy(alpha = .82f),
+                style = Stroke(
+                    width = 2.4.dp.toPx(),
+                    cap = StrokeCap.Round,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 6.dp.toPx())),
+                ),
+            )
+        }
+        drawPath(
+            selected,
+            color = Color.White.copy(alpha = .94f),
+            style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round),
+        )
+        drawPath(
+            selected,
+            color = selectedColor.copy(alpha = .94f),
+            style = Stroke(
+                width = 3.dp.toPx(),
+                cap = StrokeCap.Round,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 4.dp.toPx())),
+            ),
+        )
+        val recommendedNodes = listOf(
+            androidx.compose.ui.geometry.Offset(size.width * .47f, size.height * .86f),
+            androidx.compose.ui.geometry.Offset(size.width * .38f, size.height * .56f),
+            androidx.compose.ui.geometry.Offset(size.width * .54f, size.height * .25f),
+            androidx.compose.ui.geometry.Offset(size.width * .72f, size.height * .13f),
+        )
+        val alternativeNodes = listOf(
+            androidx.compose.ui.geometry.Offset(size.width * .47f, size.height * .86f),
+            androidx.compose.ui.geometry.Offset(size.width * .70f, size.height * .57f),
+            androidx.compose.ui.geometry.Offset(size.width * .73f, size.height * .24f),
+            androidx.compose.ui.geometry.Offset(size.width * .72f, size.height * .13f),
+        )
+        (if (selectedAlternative) alternativeNodes else recommendedNodes).forEachIndexed { index, point ->
+            drawCircle(Color.White.copy(alpha = .96f), radius = if (index in 1..2) 7.dp.toPx() else 8.dp.toPx(), center = point)
+            drawCircle(selectedColor, radius = if (index in 1..2) 4.dp.toPx() else 5.dp.toPx(), center = point)
         }
     }
 }
@@ -788,9 +878,10 @@ private class ParkRouteController(
                     .width(if (selected) 14f else 8f)
                     .color(
                         when {
-                            selected && (index == 0 || !showAlternativeRoutes) -> AndroidColor.rgb(49, 94, 75)
-                            selected -> AndroidColor.rgb(184, 107, 44)
-                            else -> AndroidColor.argb(125, 142, 153, 147)
+                            selected && (index == 0 || !showAlternativeRoutes) -> AndroidColor.rgb(216, 255, 47)
+                            selected -> AndroidColor.rgb(255, 116, 102)
+                            index == 0 -> AndroidColor.argb(165, 177, 206, 59)
+                            else -> AndroidColor.argb(165, 211, 104, 94)
                         },
                     )
                     .zIndex(if (selected) 8f else 5f)

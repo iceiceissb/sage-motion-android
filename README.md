@@ -41,6 +41,7 @@
 - v1.14 真实知识路线与响应式纸刊：知识路线只显示当前选中的高德真实步行路线，照片、语音和改线节点按真实路程锚定；路线推荐改成图形化路线卡；拾景纸刊按照片语义切换屏幕、植物、水面、建筑、人物等构图，不再复用固定花朵。
 - v1.15 精简路线结果与处理动效：路线结果页移除重复的偏好栏和高德路线摘要卡，只保留地图、路线与最终选择；语音任务处理中银小叶持续播放序列帧并轻微呼吸浮动，处理结束立即停止。
 - v1.16 重规划与识别界面减法：更改路线结果页移除地图中央重复的高德路线摘要卡；多点识别结果由深色文字块改为分散在识别位置附近的半透明圆泡泡，只保留类别和置信度，减少对照片主体的遮挡。
+- 当前工作区视觉重塑：主流程采用“数字公园信号层”语言，在真实高德地图上叠加深墨 HUD、酸性黄绿推荐路线、青色声场信号、珊瑚色备选/风险语义与少量等高线符号；高德 `MapView`、`RouteSearchV2`、定位和原生 `Polyline` 流程保持不变。
 
 ## API 预留
 
@@ -89,7 +90,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 4. 每轮任务结束后记录参与者是否查看依据、换路线或采纳结果。
 5. 实验结束后在研究员控制台导出 CSV。
 
-更完整的实验执行说明见 [EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md)，视觉与动效规范见 [DESIGN_SPEC.md](DESIGN_SPEC.md)，真实生成式纸刊的后端边界见 [ZINE_GENERATION_INTEGRATION.md](ZINE_GENERATION_INTEGRATION.md)，上传 GitHub 见 [GITHUB_UPLOAD.md](GITHUB_UPLOAD.md)。
+更完整的实验执行说明见 [EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md)，视觉与动效规范见 [DESIGN_SPEC.md](DESIGN_SPEC.md)，UI 共创反馈方式见 [UI_REDESIGN_WORKFLOW.md](UI_REDESIGN_WORKFLOW.md)，真实生成式纸刊的后端边界见 [ZINE_GENERATION_INTEGRATION.md](ZINE_GENERATION_INTEGRATION.md)，上传 GitHub 见 [GITHUB_UPLOAD.md](GITHUB_UPLOAD.md)。
 
 ## 工程结构
 
@@ -109,8 +110,8 @@ app/src/main/java/cn/tsinghua/sagemotion/
 
 ## 验证状态
 
-- JVM 单元测试：19 项通过。
+- JVM 单元测试：20 项通过。
 - Debug APK 构建：通过。
 - Android Lint：通过，无错误。
-- 390 × 844dp Compose 截图回归：路线约束、双路线计算、路线结果、草坪外环线与改道后的探索工作台、视觉提取/圈搜回答与圈搜语音、语音问答、路线式知识游记、动态调整、问卷与历史页共 17 个基线。
+- 390 × 844dp Compose 截图回归：路线约束、双路线计算、路线结果、草坪外环线与改道后的探索工作台、视觉提取/圈搜回答与圈搜语音、语音问答、路线式知识游记、动态调整、问卷与历史页共 21 个基线。
 - 设计对比与修正记录见 [design-qa.md](design-qa.md) 和 `qa-reference-vs-render.png`。
