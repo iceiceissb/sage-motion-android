@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,6 +65,7 @@ import cn.tsinghua.sagemotion.ui.theme.SageInk
 import cn.tsinghua.sagemotion.ui.theme.SageMist
 import cn.tsinghua.sagemotion.ui.theme.SageMotion
 import cn.tsinghua.sagemotion.ui.theme.SageMuted
+import cn.tsinghua.sagemotion.ui.theme.SageOnSignal
 import cn.tsinghua.sagemotion.ui.theme.SageSignalCyan
 import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 import kotlin.math.PI
@@ -243,8 +245,8 @@ fun WelcomeScreen(
                 val measure = PathMeasure().apply { setPath(trail, false) }
                 val visible = Path()
                 measure.getSegment(0f, measure.length * trailIn, visible, true)
-                drawPath(visible, SageSignalLime.copy(alpha = .28f), style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
-                drawPath(visible, SageSignalLime.copy(alpha = .80f), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(visible, SageSignalLime.copy(alpha = .08f), style = Stroke(8.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(visible, SageSignalLime.copy(alpha = .30f), style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
 
                 // 显影头：让「正在走进这片公园」这件事有一个可追踪的位置。
                 if (trailIn < .99f) {
@@ -370,6 +372,10 @@ fun WelcomeScreen(
             Button(
                 onClick = onEnter,
                 shape = sageBubbleShape(1),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SageSignalLime,
+                    contentColor = SageOnSignal,
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 22.dp)
@@ -379,7 +385,7 @@ fun WelcomeScreen(
                         translationY = (1f - orbIn) * 22f
                     },
             ) {
-                Text("开始今天的探索", fontSize = 16.sp)
+                Text("开始今天的探索", color = SageOnSignal, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

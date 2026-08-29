@@ -49,8 +49,8 @@ fun SignalHudSurface(
                     Brush.verticalGradient(
                         listOf(
                             SageHud.copy(alpha = .98f),
-                            Color(0xFF07100E).copy(alpha = .96f),
-                            Color(0xFF030807).copy(alpha = .98f),
+                            Color(0xFF111C18).copy(alpha = .97f),
+                            Color(0xFF08100E).copy(alpha = .99f),
                         ),
                     ),
                 )

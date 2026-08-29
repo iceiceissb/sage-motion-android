@@ -1,6 +1,7 @@
 package cn.tsinghua.sagemotion.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -40,10 +42,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.tsinghua.sagemotion.ui.theme.SageGreen
+import cn.tsinghua.sagemotion.ui.theme.SageDivider
 import cn.tsinghua.sagemotion.ui.theme.SageInk
 import cn.tsinghua.sagemotion.ui.theme.SageMist
 import cn.tsinghua.sagemotion.ui.theme.SageMuted
+import cn.tsinghua.sagemotion.ui.theme.SageOnSignal
 import cn.tsinghua.sagemotion.ui.theme.SagePanelRaised
+import cn.tsinghua.sagemotion.ui.theme.SagePanelSoft
 import cn.tsinghua.sagemotion.ui.theme.SageSignalCyan
 import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 import cn.tsinghua.sagemotion.ui.theme.SageSurface
@@ -98,6 +103,7 @@ fun ResearcherSetupScreen(
             Card(
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = SagePanelRaised),
+                border = BorderStroke(1.dp, SageDivider),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
@@ -126,9 +132,16 @@ fun ResearcherSetupScreen(
                     .padding(top = 16.dp)
                     .height(56.dp),
                 shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SageSignalLime,
+                    contentColor = SageOnSignal,
+                    disabledContainerColor = SagePanelSoft,
+                    disabledContentColor = SageMuted,
+                ),
             ) {
                 Text(
                     "开始实验会话",
+                    color = if (participantId.isNotBlank()) SageOnSignal else SageMuted,
                     fontSize = 17.sp,
                 )
             }

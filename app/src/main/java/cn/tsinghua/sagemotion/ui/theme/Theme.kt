@@ -21,13 +21,13 @@ val SageGreenDark = Color(0xFF173A2E)
 /** 更深的林冠色，用于覆盖在真实场景之上的深色浮层，保证白字对比度。 */
 val SageCanopy = Color(0xFF07100E)
 val SageSurface = Color(0xFF050806)
-val SagePanel = Color(0xFF0B1210)
-val SagePanelRaised = Color(0xFF111A17)
-val SagePanelSoft = Color(0xFF18241F)
+val SagePanel = Color(0xFF101714)
+val SagePanelRaised = Color(0xFF18221E)
+val SagePanelSoft = Color(0xFF22302A)
 val SageMist = SagePanelSoft
 val SageInk = Color(0xFFF2F6F3)
-val SageMuted = Color(0xFF9AA7A0)
-val SageDivider = Color(0xFF304039)
+val SageMuted = Color(0xFFAAB5AF)
+val SageDivider = Color(0xFF42574E)
 
 // ---- 语义保留色 ----
 /** 不确定性专用赭色。只表达信息缺口与能力边界，不得用作装饰。 */
@@ -36,9 +36,9 @@ val SageWarningSurface = Color(0xFF2B1713)
 
 // ---- 手账拼贴层 ----
 /** 手账纸底。对应设计建议「手账拼贴画的形式，路线+照片+小标题文字」。 */
-val SagePaper = Color(0xFF0D1512)
-val SagePaperEdge = Color(0xFF33433B)
-val SagePaperShade = Color(0xFF131D19)
+val SagePaper = SagePanel
+val SagePaperEdge = SageDivider
+val SagePaperShade = SagePanelRaised
 
 /**
  * 戏曲朱红。八家郊野公园南园以戏曲文化为主题，这里作为手账贴纸与地标的装饰色。
@@ -60,8 +60,8 @@ val SagePaperMuted = SageMuted
 
 // ---- 数字公园信号层 ----
 /** 地图 HUD 的深墨底；只用于空间界面叠层，不替换真实高德底图。 */
-val SageHud = Color(0xFF08110F)
-val SageHudEdge = Color(0xFF52615A).copy(alpha = .70f)
+val SageHud = Color(0xFF0B1512)
+val SageHudEdge = Color(0xFF63766D).copy(alpha = .76f)
 val SageHudMuted = Color(0xFFA9B4AE)
 
 /** 主行动、推荐路线与“正在感知”的唯一高能强调色。 */
@@ -100,7 +100,7 @@ private val SageColorScheme = darkColorScheme(
     surfaceVariant = SagePanelSoft,
     onSurfaceVariant = SageMuted,
     outline = SageDivider,
-    outlineVariant = Color(0xFF202D28),
+    outlineVariant = Color(0xFF31423A),
     error = SageSignalCoral,
     onError = SageOnSignal,
 )

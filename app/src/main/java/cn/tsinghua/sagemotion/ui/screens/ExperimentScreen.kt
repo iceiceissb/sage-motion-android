@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -1113,7 +1114,7 @@ private fun RouteResultPanel(
                 selected = choice == RouteChoice.RECOMMENDED,
                 accent = SageSignalLime,
                 onClick = { onChoice(RouteChoice.RECOMMENDED) },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             )
             SignalDivider(Modifier.fillMaxWidth().height(1.dp))
             RouteChoiceCard(
@@ -1122,7 +1123,7 @@ private fun RouteResultPanel(
                 selected = choice == RouteChoice.ALTERNATIVE,
                 accent = SageSignalCoral,
                 onClick = { onChoice(RouteChoice.ALTERNATIVE) },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             )
             if (full) {
                 Surface(
@@ -1226,7 +1227,7 @@ private fun RouteChoiceCard(
             .clickable(onClick = onClick),
     ) {
         Row(
-            Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -1242,9 +1243,18 @@ private fun RouteChoiceCard(
                     title,
                     color = if (selected) accent else Color.White,
                     fontSize = 12.sp,
+                    lineHeight = 16.sp,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 )
-                Text(detail, color = SageHudMuted, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(top = 1.dp))
+                Text(
+                    detail,
+                    color = SageHudMuted,
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
             Icon(
                 Icons.AutoMirrored.Filled.ArrowForward,
@@ -2313,6 +2323,7 @@ private fun JourneyRouteMap(
             selectedJourneyPhotoIndex = selectedIndex,
             onJourneyPhotoSelected = onSelected,
             gesturesEnabled = false,
+            useNightStyle = true,
         )
         Surface(color = SagePanel.copy(alpha = .94f), shape = RoundedCornerShape(10.dp), modifier = Modifier.align(Alignment.TopStart).padding(10.dp)) {
             Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {

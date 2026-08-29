@@ -17,20 +17,27 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -69,7 +76,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.tsinghua.sagemotion.BuildConfig
 import cn.tsinghua.sagemotion.R
+import cn.tsinghua.sagemotion.ui.theme.SageHudMuted
+import cn.tsinghua.sagemotion.ui.theme.SageInk
+import cn.tsinghua.sagemotion.ui.theme.SageMuted
+import cn.tsinghua.sagemotion.ui.theme.SageOnSignal
+import cn.tsinghua.sagemotion.ui.theme.SagePanel
+import cn.tsinghua.sagemotion.ui.theme.SagePanelRaised
 import cn.tsinghua.sagemotion.ui.theme.SageSignalCoral
+import cn.tsinghua.sagemotion.ui.theme.SageSignalCyan
 import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 import com.amap.api.location.AMapLocation
 import com.amap.api.location.AMapLocationClient
@@ -200,6 +214,7 @@ fun AmapParkMap(
     guidanceControls: Boolean = false,
     guidanceBottomInset: Dp = 0.dp,
     gesturesEnabled: Boolean = true,
+    useNightStyle: Boolean = false,
     showAlternativeRoutes: Boolean = true,
     journeyPhotoUris: List<String> = emptyList(),
     journeyVoiceCount: Int = 0,
@@ -217,10 +232,29 @@ fun AmapParkMap(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
+            if (useNightStyle) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF03100D).copy(alpha = .72f)),
+                )
+            }
             if (routeEnabled) {
                 PreviewFieldRouteOverlay(
                     selectedAlternative = selectedAlternative,
                     showAlternativeRoutes = showAlternativeRoutes,
+                    darkPresentation = useNightStyle,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            if (
+                useNightStyle &&
+                (journeyPhotoUris.isNotEmpty() || journeyVoiceCount > 0 || journeyReplanCount > 0)
+            ) {
+                PreviewJourneyMarkerOverlay(
+                    photoCount = journeyPhotoUris.size,
+                    voiceCount = journeyVoiceCount,
+                    replanCount = journeyReplanCount,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -263,10 +297,10 @@ fun AmapParkMap(
     AMapLocationClient.updatePrivacyShow(applicationContext, true, true)
     AMapLocationClient.updatePrivacyAgree(applicationContext, true)
 
-    val mapView = remember(context, gesturesEnabled) {
+    val mapView = remember(context, gesturesEnabled, useNightStyle) {
         MapView(context).apply {
             onCreate(null)
-            configureBaseMap(context, map, gesturesEnabled)
+            configureBaseMap(context, map, gesturesEnabled, useNightStyle)
         }
     }
     val controller = remember(mapView) {
@@ -398,6 +432,7 @@ private fun PreviewFieldRouteOverlay(
     selectedAlternative: Boolean,
     showAlternativeRoutes: Boolean,
     modifier: Modifier = Modifier,
+    darkPresentation: Boolean = false,
 ) {
     Canvas(modifier) {
         val recommended = Path().apply {
@@ -416,10 +451,11 @@ private fun PreviewFieldRouteOverlay(
         val compared = if (selectedAlternative) recommended else alternative
         val selectedColor = if (selectedAlternative) SageSignalCoral else SageSignalLime
         val comparedColor = if (selectedAlternative) SageSignalLime else SageSignalCoral
+        val routeUnderlay = if (darkPresentation) SagePanel.copy(alpha = .96f) else Color.White.copy(alpha = .90f)
         if (showAlternativeRoutes) {
             drawPath(
                 compared,
-                color = Color.White.copy(alpha = .90f),
+                color = routeUnderlay,
                 style = Stroke(width = 5.5.dp.toPx(), cap = StrokeCap.Round),
             )
             drawPath(
@@ -434,7 +470,7 @@ private fun PreviewFieldRouteOverlay(
         }
         drawPath(
             selected,
-            color = Color.White.copy(alpha = .94f),
+            color = routeUnderlay,
             style = Stroke(width = 7.dp.toPx(), cap = StrokeCap.Round),
         )
         drawPath(
@@ -459,8 +495,53 @@ private fun PreviewFieldRouteOverlay(
             androidx.compose.ui.geometry.Offset(size.width * .72f, size.height * .13f),
         )
         (if (selectedAlternative) alternativeNodes else recommendedNodes).forEachIndexed { index, point ->
-            drawCircle(Color.White.copy(alpha = .96f), radius = if (index in 1..2) 7.dp.toPx() else 8.dp.toPx(), center = point)
+            drawCircle(
+                if (darkPresentation) SagePanelRaised else Color.White.copy(alpha = .96f),
+                radius = if (index in 1..2) 7.dp.toPx() else 8.dp.toPx(),
+                center = point,
+            )
             drawCircle(selectedColor, radius = if (index in 1..2) 4.dp.toPx() else 5.dp.toPx(), center = point)
+        }
+    }
+}
+
+/** 截图与无密钥状态下的品牌化旅程节点；真机联网时由高德 Marker 对应呈现。 */
+@Composable
+private fun PreviewJourneyMarkerOverlay(
+    photoCount: Int,
+    voiceCount: Int,
+    replanCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    val specs = buildList {
+        repeat(photoCount) { add("景" to SageSignalLime) }
+        repeat(voiceCount) { add("语" to SageSignalCyan) }
+        repeat(replanCount.coerceAtMost(1)) { add("改" to SageSignalCoral) }
+    }.take(6)
+    val positions = listOf(
+        .18f to .68f,
+        .34f to .56f,
+        .50f to .48f,
+        .64f to .37f,
+        .76f to .27f,
+        .84f to .18f,
+    )
+    BoxWithConstraints(modifier) {
+        specs.forEachIndexed { index, (label, accent) ->
+            val (x, y) = positions[index]
+            Surface(
+                color = SagePanelRaised.copy(alpha = .98f),
+                contentColor = accent,
+                shape = CircleShape,
+                border = BorderStroke(1.5.dp, accent),
+                modifier = Modifier
+                    .offset(x = (maxWidth - 34.dp) * x, y = (maxHeight - 34.dp) * y)
+                    .size(34.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(label, color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }
@@ -485,7 +566,7 @@ private fun ParkRouteStatusCard(
         ) {
             Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("↗", color = Color(0xFF315E4B), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("↗", color = SageSignalLime, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     Column(
                         Modifier
                             .weight(1f)
@@ -493,7 +574,7 @@ private fun ParkRouteStatusCard(
                     ) {
                         Text(
                             text = primaryText,
-                            color = if (state.isError) Color(0xFFB35D2E) else Color(0xFF1F3028),
+                            color = if (state.isError) SageSignalCoral else SageInk,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
@@ -502,7 +583,7 @@ private fun ParkRouteStatusCard(
                         if (secondaryText != primaryText) {
                             Text(
                                 text = secondaryText,
-                                color = Color(0xFF607068),
+                                color = SageMuted,
                                 fontSize = 10.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -510,17 +591,28 @@ private fun ParkRouteStatusCard(
                         }
                     }
                     TextButton(onClick = { expanded = !expanded }) {
-                        Text(if (expanded) "收起" else "详情", fontSize = 10.sp)
+                        Text(if (expanded) "收起" else "详情", color = SageSignalLime, fontSize = 10.sp)
                     }
-                    Button(onClick = onToggleGuidance) {
-                        Text(if (state.isGuiding) "结束" else "开始", fontSize = 10.sp)
+                    Button(
+                        onClick = onToggleGuidance,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SageSignalLime,
+                            contentColor = SageOnSignal,
+                        ),
+                    ) {
+                        Text(
+                            if (state.isGuiding) "结束" else "开始",
+                            color = SageOnSignal,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                 }
                 if (expanded) {
                     if (state.status != primaryText && state.status != secondaryText) {
                         Text(
                             text = state.status,
-                            color = if (state.isError) Color(0xFFB35D2E) else Color(0xFF34423B),
+                            color = if (state.isError) SageSignalCoral else SageHudMuted,
                             fontSize = 10.sp,
                             modifier = Modifier.padding(top = 3.dp),
                         )
@@ -530,8 +622,8 @@ private fun ParkRouteStatusCard(
                             Modifier.fillMaxWidth().padding(start = 32.dp),
                             horizontalArrangement = Arrangement.End,
                         ) {
-                            TextButton(onClick = onRecenter) { Text("回到位置", fontSize = 10.sp) }
-                            TextButton(onClick = onReplan) { Text("重新计算", fontSize = 10.sp) }
+                            TextButton(onClick = onRecenter) { Text("回到位置", color = SageSignalCyan, fontSize = 10.sp) }
+                            TextButton(onClick = onReplan) { Text("重新计算", color = SageSignalLime, fontSize = 10.sp) }
                         }
                     }
                 }
@@ -545,25 +637,25 @@ private fun ParkRouteStatusCard(
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("↗", color = Color(0xFF315E4B), fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text("↗", color = SageSignalLime, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Text(
                     text = if (state.isGuiding) "银小叶 · 园内指引" else "银小叶 · 高德路线",
-                    color = Color(0xFF315E4B),
+                    color = SageSignalLime,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(start = 6.dp),
                 )
             }
             Text(
                 text = state.status,
-                color = if (state.isError) Color(0xFFB35D2E) else Color(0xFF34423B),
+                color = if (state.isError) SageSignalCoral else SageHudMuted,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 3.dp),
             )
             if (state.summary.isNotBlank()) {
-                Text(state.summary, color = Color(0xFF607068), fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
+                Text(state.summary, color = SageMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
             }
             if (state.instruction.isNotBlank()) {
-                Text(state.instruction, color = Color(0xFF1F3028), fontSize = 11.sp, modifier = Modifier.padding(top = 5.dp))
+                Text(state.instruction, color = SageInk, fontSize = 11.sp, modifier = Modifier.padding(top = 5.dp))
             }
         }
     }
@@ -793,7 +885,8 @@ private class ParkRouteController(
                 MarkerOptions()
                     .position(point)
                     .title("当前位置")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE))
+                    .anchor(.5f, .5f)
+                    .icon(textMarkerIcon("我", AndroidColor.rgb(57, 221, 214)))
                     .zIndex(20f),
             )
         } else {
@@ -893,14 +986,16 @@ private class ParkRouteController(
             MarkerOptions()
                 .position(selectedPath.points.first())
                 .title(if (guidanceRequested) "当前位置附近" else "园内路线起点")
-                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)),
+                .anchor(.5f, .5f)
+                .icon(textMarkerIcon("起", AndroidColor.rgb(216, 255, 47))),
         )
         drawJourneyMarkers(selectedPath)
         endpointMarkers += map.addMarker(
             MarkerOptions()
                 .position(selectedPath.points.last())
                 .title("儿童活动区外环")
-                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)),
+                .anchor(.5f, .5f)
+                .icon(textMarkerIcon("终", AndroidColor.rgb(255, 116, 102))),
         )
 
         val firstInstruction = selectedPath.steps.firstOrNull()?.instruction.orEmpty()
@@ -951,8 +1046,8 @@ private class ParkRouteController(
                                 spec.photoIndex,
                                 selected = spec.photoIndex == selectedJourneyPhotoIndex,
                             )
-                            "voice" -> textMarkerIcon("语", AndroidColor.rgb(78, 113, 139))
-                            else -> textMarkerIcon("改", AndroidColor.rgb(184, 107, 44))
+                            "voice" -> textMarkerIcon("语", AndroidColor.rgb(57, 221, 214))
+                            else -> textMarkerIcon("改", AndroidColor.rgb(255, 116, 102))
                         },
                     ),
             )
@@ -990,7 +1085,7 @@ private class ParkRouteController(
         val center = size / 2f
         val radius = size * .39f
         canvas.drawCircle(center, center, size * .48f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (selected) AndroidColor.rgb(49, 94, 75) else AndroidColor.WHITE
+            color = AndroidColor.rgb(16, 23, 20)
         })
         val shader = BitmapShader(source, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
         val scale = maxOf(size * .78f / source.width, size * .78f / source.height)
@@ -1000,27 +1095,34 @@ private class ParkRouteController(
         })
         canvas.drawCircle(center, center, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply { this.shader = shader })
         canvas.drawCircle(center, center, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.WHITE
+            color = if (selected) AndroidColor.rgb(216, 255, 47) else AndroidColor.rgb(66, 87, 78)
             style = Paint.Style.STROKE
             strokeWidth = density * 2.2f
         })
         val badgeRadius = density * 8f
         val badgeX = size - badgeRadius * 1.05f
         val badgeY = badgeRadius * 1.05f
-        canvas.drawCircle(badgeX, badgeY, badgeRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(184, 107, 44) })
+        canvas.drawCircle(badgeX, badgeY, badgeRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.rgb(16, 23, 20)
+        })
+        canvas.drawCircle(badgeX, badgeY, badgeRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.rgb(216, 255, 47)
+            style = Paint.Style.STROKE
+            strokeWidth = density * 1.5f
+        })
         canvas.drawText(
             (index + 1).toString(),
             badgeX,
             badgeY + density * 3.4f,
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = AndroidColor.WHITE
+                color = AndroidColor.rgb(216, 255, 47)
                 textAlign = Paint.Align.CENTER
                 textSize = density * 9f
                 typeface = Typeface.DEFAULT_BOLD
             },
         )
         BitmapDescriptorFactory.fromBitmap(output)
-    }.getOrElse { BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN) }
+    }.getOrElse { textMarkerIcon("景", AndroidColor.rgb(216, 255, 47)) }
 
     private fun decodeMarkerBitmap(rawUri: String): Bitmap? {
         val uri = Uri.parse(rawUri)
@@ -1032,20 +1134,26 @@ private class ParkRouteController(
         return context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
     }
 
-    private fun textMarkerIcon(label: String, backgroundColor: Int) = run {
+    private fun textMarkerIcon(label: String, accentColor: Int) = run {
         val density = context.resources.displayMetrics.density
-        val size = (40f * density).roundToInt().coerceAtLeast(56)
+        val size = (38f * density).roundToInt().coerceAtLeast(56)
         val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = AndroidCanvas(output)
         val center = size / 2f
-        canvas.drawCircle(center, center, size * .43f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE })
-        canvas.drawCircle(center, center, size * .36f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = backgroundColor })
+        canvas.drawCircle(center, center, size * .43f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.rgb(16, 23, 20)
+        })
+        canvas.drawCircle(center, center, size * .38f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = accentColor
+            style = Paint.Style.STROKE
+            strokeWidth = density * 2.1f
+        })
         canvas.drawText(
             label,
             center,
             center + density * 5f,
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = AndroidColor.WHITE
+                color = accentColor
                 textAlign = Paint.Align.CENTER
                 textSize = density * 14f
                 typeface = Typeface.DEFAULT_BOLD
@@ -1151,18 +1259,23 @@ private class ParkRouteController(
     override fun onRideRouteSearched(result: RideRouteResultV2?, resultCode: Int) = Unit
 }
 
-private fun configureBaseMap(context: Context, map: AMap, gesturesEnabled: Boolean) {
+private fun configureBaseMap(
+    context: Context,
+    map: AMap,
+    gesturesEnabled: Boolean,
+    useNightStyle: Boolean,
+) {
     map.uiSettings.apply {
         isZoomControlsEnabled = false
         isCompassEnabled = false
-        isScaleControlsEnabled = true
+        isScaleControlsEnabled = !useNightStyle
         isMyLocationButtonEnabled = false
         isScrollGesturesEnabled = gesturesEnabled
         isZoomGesturesEnabled = gesturesEnabled
         isRotateGesturesEnabled = gesturesEnabled
         isTiltGesturesEnabled = gesturesEnabled
     }
-    map.mapType = AMap.MAP_TYPE_NORMAL
+    map.mapType = if (useNightStyle) AMap.MAP_TYPE_NIGHT else AMap.MAP_TYPE_NORMAL
     map.showBuildings(true)
     map.showMapText(true)
     map.setRoadArrowEnable(true)
@@ -1184,7 +1297,7 @@ private fun configureBaseMap(context: Context, map: AMap, gesturesEnabled: Boole
 
         else -> null
     }
-    customStyle?.let(map::setCustomMapStyle)
+    if (!useNightStyle) customStyle?.let(map::setCustomMapStyle)
     map.moveCamera(
         CameraUpdateFactory.newCameraPosition(
             CameraPosition(PARK_CENTER_GCJ02, 17.1f, 46f, 12f),
