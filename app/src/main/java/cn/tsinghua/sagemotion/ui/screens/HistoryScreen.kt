@@ -68,6 +68,9 @@ import cn.tsinghua.sagemotion.ui.theme.SageGreenDark
 import cn.tsinghua.sagemotion.ui.theme.SageInk
 import cn.tsinghua.sagemotion.ui.theme.SageMist
 import cn.tsinghua.sagemotion.ui.theme.SageMuted
+import cn.tsinghua.sagemotion.ui.theme.SagePanelRaised
+import cn.tsinghua.sagemotion.ui.theme.SageSignalCoral
+import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 import cn.tsinghua.sagemotion.ui.theme.SageSurface
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -125,7 +128,7 @@ fun HistoryScreen(
                 item { Spacer(Modifier.height(8.dp)) }
             }
         }
-        Surface(color = Color.White, shadowElevation = 8.dp) {
+        Surface(color = SagePanelRaised, shadowElevation = 8.dp) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp)) {
                 Button(
                     onClick = onExportAll,
@@ -144,7 +147,7 @@ fun HistoryScreen(
                 ) {
                     Icon(Icons.Default.DeleteSweep, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(7.dp))
-                    Text("删除全部历史数据", color = Color(0xFFB45A4C))
+                    Text("删除全部历史数据", color = SageSignalCoral)
                 }
                 Text(
                     "记录仅保存在本机应用私有目录，除非你主动导出。",
@@ -158,7 +161,7 @@ fun HistoryScreen(
     pendingDelete?.let { session ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            icon = { Icon(Icons.Default.DeleteOutline, null, tint = Color(0xFFB45A4C)) },
+            icon = { Icon(Icons.Default.DeleteOutline, null, tint = SageSignalCoral) },
             title = { Text("删除 ${session.participantId} 的会话？") },
             text = { Text("将永久删除本次 CSV 和该会话记录到的过程照片，无法恢复。") },
             confirmButton = {
@@ -170,7 +173,7 @@ fun HistoryScreen(
     if (confirmDeleteAll) {
         AlertDialog(
             onDismissRequest = { confirmDeleteAll = false },
-            icon = { Icon(Icons.Default.DeleteSweep, null, tint = Color(0xFFB45A4C)) },
+            icon = { Icon(Icons.Default.DeleteSweep, null, tint = SageSignalCoral) },
             title = { Text("删除全部历史数据？") },
             text = { Text("将删除全部非活动会话、关联照片和历史导出包。当前进行中的会话会受到保护。") },
             confirmButton = {
@@ -187,7 +190,9 @@ private fun HistoryTopBar(title: String, onBack: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
     ) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") }
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = SageInk)
+        }
         Text(title, color = SageInk, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
     }
 }
@@ -198,14 +203,14 @@ private fun StorageOverview(sessions: List<SessionSummary>) {
     val tasks = sessions.sumOf { it.completedTaskCount }
     val size = sessions.sumOf { it.sizeBytes }
     Card(
-        colors = CardDefaults.cardColors(containerColor = SageGreenDark),
+        colors = CardDefaults.cardColors(containerColor = SagePanelRaised),
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(38.dp).background(Color.White.copy(alpha = .13f), CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Storage, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Storage, null, tint = SageSignalLime, modifier = Modifier.size(20.dp))
                 }
                 Column(Modifier.padding(start = 11.dp)) {
                     Text("本地存储正常", color = Color.White, fontWeight = FontWeight.SemiBold)
@@ -234,20 +239,20 @@ private fun OverviewMetric(value: String, label: String) {
 private fun SessionCard(session: SessionSummary, onClick: () -> Unit, onDelete: () -> Unit) {
     val formatter = remember { SimpleDateFormat("yyyy-MM-dd  HH:mm", Locale.getDefault()) }
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = SagePanelRaised),
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                Modifier.size(44.dp).background(if (session.completed) SageMist else Color(0xFFFFF0DE), CircleShape),
+                Modifier.size(44.dp).background(if (session.completed) SageMist else SageSignalCoral.copy(alpha = .12f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     if (session.completed) Icons.Default.CheckCircle else Icons.Default.Schedule,
                     null,
-                    tint = if (session.completed) SageGreen else Color(0xFFAA662A),
+                    tint = if (session.completed) SageSignalLime else SageSignalCoral,
                     modifier = Modifier.size(23.dp),
                 )
             }
@@ -256,10 +261,10 @@ private fun SessionCard(session: SessionSummary, onClick: () -> Unit, onDelete: 
                     Text(session.participantId, color = SageInk, fontWeight = FontWeight.SemiBold)
                     Text(
                         if (session.completed) "已完成" else "未结束",
-                        color = if (session.completed) SageGreen else Color(0xFFAA662A),
+                        color = if (session.completed) SageSignalLime else SageSignalCoral,
                         fontSize = 10.sp,
                         modifier = Modifier.padding(start = 8.dp).background(
-                            if (session.completed) SageMist else Color(0xFFFFF0DE),
+                            if (session.completed) SageMist else SageSignalCoral.copy(alpha = .12f),
                             RoundedCornerShape(7.dp),
                         ).padding(horizontal = 6.dp, vertical = 3.dp),
                     )
@@ -274,7 +279,7 @@ private fun SessionCard(session: SessionSummary, onClick: () -> Unit, onDelete: 
                 )
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.DeleteOutline, "删除会话", tint = Color(0xFFB45A4C), modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.DeleteOutline, "删除会话", tint = SageSignalCoral, modifier = Modifier.size(20.dp))
             }
             Icon(Icons.Default.ChevronRight, null, tint = SageMuted, modifier = Modifier.size(18.dp))
         }
@@ -330,11 +335,11 @@ private fun HistoryDetailScreen(
             }
             item { Spacer(Modifier.height(10.dp)) }
         }
-        Surface(color = Color.White, shadowElevation = 8.dp) {
+        Surface(color = SagePanelRaised, shadowElevation = 8.dp) {
             Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = { confirmDelete = true }, modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(17.dp)) {
-                    Icon(Icons.Default.DeleteOutline, null, tint = Color(0xFFB45A4C), modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp)); Text("删除", color = Color(0xFFB45A4C))
+                    Icon(Icons.Default.DeleteOutline, null, tint = SageSignalCoral, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp)); Text("删除", color = SageSignalCoral)
                 }
                 OutlinedButton(onClick = onExport, modifier = Modifier.weight(2f).height(50.dp), shape = RoundedCornerShape(17.dp)) {
                     Icon(Icons.Default.Download, null, modifier = Modifier.size(18.dp))
@@ -358,7 +363,7 @@ private fun HistoryDetailScreen(
 private fun HistoryJourneyCard(path: String, onShare: () -> Unit) {
     val bitmap = remember(path) { BitmapFactory.decodeFile(path)?.asImageBitmap() }
     if (bitmap == null) return
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = SagePanelRaised), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
                 Column(Modifier.weight(1f)) {
@@ -384,11 +389,11 @@ private fun HistoryJourneyCard(path: String, onShare: () -> Unit) {
 @Composable
 private fun DetailSummary(summary: SessionSummary) {
     val formatter = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
-    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(20.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = SagePanelRaised), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(17.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.CloudDone, null, tint = SageGreen)
-                Text("记录文件完整可用", color = SageGreenDark, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 9.dp))
+                Icon(Icons.Default.CloudDone, null, tint = SageSignalLime)
+                Text("记录文件完整可用", color = SageSignalLime, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 9.dp))
             }
             HorizontalDivider(Modifier.padding(vertical = 13.dp), color = SageDivider)
             DetailLine("开始时间", formatter.format(Date(summary.startedAtMillis)))
@@ -416,7 +421,7 @@ private fun EventRow(event: HistoryEvent) {
             Box(Modifier.width(1.dp).height(52.dp).background(SageDivider))
         }
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = SagePanelRaised),
             shape = RoundedCornerShape(15.dp),
             modifier = Modifier.weight(1f),
         ) {
@@ -456,8 +461,8 @@ private fun eventLabel(event: String): String = when (event) {
 }
 
 private fun eventColor(event: String): Color = when (event) {
-    "task_failed", "task_cancelled" -> Color(0xFFB45A4C)
-    "result_adopted", "demo_completed", "session_completed" -> SageGreen
+    "task_failed", "task_cancelled" -> SageSignalCoral
+    "result_adopted", "demo_completed", "session_completed" -> SageSignalLime
     "evidence_opened", "route_selected" -> Color(0xFFB86B2C)
     else -> Color(0xFF7A9187)
 }

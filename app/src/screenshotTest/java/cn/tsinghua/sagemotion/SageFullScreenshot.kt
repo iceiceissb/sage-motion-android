@@ -17,6 +17,7 @@ import cn.tsinghua.sagemotion.model.ResultMetric
 import cn.tsinghua.sagemotion.ui.screens.ExperimentScreen
 import cn.tsinghua.sagemotion.ui.screens.HistoryScreen
 import cn.tsinghua.sagemotion.ui.screens.PostTaskSurveyScreen
+import cn.tsinghua.sagemotion.ui.screens.ResearcherSetupScreen
 import cn.tsinghua.sagemotion.ui.screens.WelcomeScreen
 import cn.tsinghua.sagemotion.ui.theme.SageMotionTheme
 
@@ -25,6 +26,19 @@ import cn.tsinghua.sagemotion.ui.theme.SageMotionTheme
 fun WelcomeWithIpScreenshot() {
     SageMotionTheme {
         WelcomeScreen(participantId = "P001", onEnter = {})
+    }
+}
+
+@Preview(name = "Researcher Setup", widthDp = 390, heightDp = 844, showBackground = true)
+@Composable
+fun ResearcherSetupScreenshot() {
+    SageMotionTheme {
+        ResearcherSetupScreen(
+            onStart = {},
+            onHistory = {},
+            savedSessionCount = 26,
+            statusMessage = "会话已保存",
+        )
     }
 }
 

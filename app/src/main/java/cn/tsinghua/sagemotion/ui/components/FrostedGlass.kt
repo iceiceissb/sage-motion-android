@@ -20,7 +20,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
-import cn.tsinghua.sagemotion.ui.theme.SageGreen
+import cn.tsinghua.sagemotion.ui.theme.SageHudEdge
+import cn.tsinghua.sagemotion.ui.theme.SagePanel
+import cn.tsinghua.sagemotion.ui.theme.SagePanelRaised
+import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 
 /**
  * 地图界面的轻量“毛玻璃”容器。
@@ -32,7 +35,7 @@ import cn.tsinghua.sagemotion.ui.theme.SageGreen
 fun FrostedGlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(24.dp),
-    tint: Color = Color(0xFFEAF3EC),
+    tint: Color = SagePanelRaised,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Surface(
@@ -48,13 +51,13 @@ fun FrostedGlassSurface(
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = .86f),
-                            tint.copy(alpha = .70f),
-                            Color.White.copy(alpha = .62f),
+                            SagePanelRaised.copy(alpha = .98f),
+                            tint.copy(alpha = .94f),
+                            SagePanel.copy(alpha = .98f),
                         ),
                     ),
                 )
-                .border(1.dp, Color.White.copy(alpha = .82f), shape),
+                .border(1.dp, SageHudEdge, shape),
             content = content,
         )
     }
@@ -78,8 +81,8 @@ fun BubbleChoice(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     variant: Int = 0,
-    accent: Color = SageGreen,
-    tint: Color = Color(0xFFF1F7E2),
+    accent: Color = SageSignalLime,
+    tint: Color = SagePanelRaised,
     content: @Composable RowScope.() -> Unit,
 ) {
     val scale by animateFloatAsState(
@@ -91,11 +94,11 @@ fun BubbleChoice(
         onClick = onClick,
         modifier = modifier.graphicsLayer { scaleX = scale; scaleY = scale },
         shape = shape,
-        color = if (selected) tint.copy(alpha = .96f) else Color.White.copy(alpha = .58f),
+        color = if (selected) tint else SagePanel.copy(alpha = .92f),
         contentColor = accent,
         border = androidx.compose.foundation.BorderStroke(
             width = if (selected) 1.5.dp else 1.dp,
-            color = if (selected) accent.copy(alpha = .52f) else Color.White.copy(alpha = .86f),
+            color = if (selected) accent.copy(alpha = .72f) else SageHudEdge,
         ),
         shadowElevation = if (selected) 5.dp else 1.dp,
     ) {

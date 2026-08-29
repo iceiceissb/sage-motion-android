@@ -58,15 +58,14 @@ import cn.tsinghua.sagemotion.ui.components.FrostedGlassSurface
 import cn.tsinghua.sagemotion.ui.components.MascotMood
 import cn.tsinghua.sagemotion.ui.components.sageBubbleShape
 import cn.tsinghua.sagemotion.ui.theme.SageCanopy
-import cn.tsinghua.sagemotion.ui.theme.SageDawn
 import cn.tsinghua.sagemotion.ui.theme.SageGreen
 import cn.tsinghua.sagemotion.ui.theme.SageGreenDark
 import cn.tsinghua.sagemotion.ui.theme.SageInk
 import cn.tsinghua.sagemotion.ui.theme.SageMist
 import cn.tsinghua.sagemotion.ui.theme.SageMotion
 import cn.tsinghua.sagemotion.ui.theme.SageMuted
-import cn.tsinghua.sagemotion.ui.theme.SageOpera
-import cn.tsinghua.sagemotion.ui.theme.SageSky
+import cn.tsinghua.sagemotion.ui.theme.SageSignalCyan
+import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -138,28 +137,28 @@ fun WelcomeScreen(
             val h = size.height
             val horizon = h * .54f
 
-            // 1) 天光：由暖调晨曦过渡到林地天空色。
+            // 1) 夜色：与全局黑色信息层一致，保留公园场景但不再切回浅色纸景。
             drawRect(
                 brush = Brush.verticalGradient(
-                    0f to SageDawn.copy(alpha = .92f * skyIn),
-                    .38f to SageSky.copy(alpha = .95f * skyIn),
+                    0f to Color(0xFF030605).copy(alpha = skyIn),
+                    .38f to Color(0xFF071715).copy(alpha = skyIn),
                     1f to SageCanopy,
                 ),
                 size = Size(w, h),
             )
 
-            // 朝阳。位置随时间轴微微升起，是唯一的暖光源。
+            // 冷色导航光源，与实时语音的青色信号同源。
             val sunY = horizon - h * (.08f + .06f * skyIn)
             drawCircle(
                 brush = Brush.radialGradient(
-                    listOf(Color(0xFFF7E3BC).copy(alpha = .85f * skyIn), Color.Transparent),
+                    listOf(SageSignalCyan.copy(alpha = .20f * skyIn), Color.Transparent),
                     center = Offset(w * .72f, sunY),
                     radius = w * .34f,
                 ),
                 radius = w * .34f,
                 center = Offset(w * .72f, sunY),
             )
-            drawCircle(Color(0xFFF6E9CE).copy(alpha = .70f * skyIn), w * .045f, Offset(w * .72f, sunY))
+            drawCircle(SageSignalLime.copy(alpha = .52f * skyIn), w * .035f, Offset(w * .72f, sunY))
 
             // 2) 远山轮廓：两层视差，后层更淡更慢。
             if (hillsIn > 0f) {
@@ -169,7 +168,7 @@ fun WelcomeScreen(
                     cubicTo(w * .72f, horizon - h * .12f * hillsIn, w * .86f, horizon - h * .02f * hillsIn, w, horizon - h * .05f * hillsIn)
                     lineTo(w, horizon); lineTo(0f, horizon); close()
                 }
-                drawPath(backHills, SageGreenDark.copy(alpha = .34f * hillsIn))
+                drawPath(backHills, Color(0xFF17332C).copy(alpha = .76f * hillsIn))
 
                 val frontHills = Path().apply {
                     moveTo(0f, horizon + h * .01f)
@@ -177,7 +176,7 @@ fun WelcomeScreen(
                     cubicTo(w * .82f, horizon - h * .06f * hillsIn, w * .93f, horizon + h * .01f, w, horizon - h * .01f)
                     lineTo(w, horizon + h * .02f); lineTo(0f, horizon + h * .02f); close()
                 }
-                drawPath(frontHills, SageGreenDark.copy(alpha = .55f * hillsIn))
+                drawPath(frontHills, Color(0xFF0D211C).copy(alpha = .92f * hillsIn))
             }
 
             // 3) 生态湖区：南园五区之一。水面用横向反光带表达，不做波浪循环，避免抢注意力。
@@ -187,8 +186,8 @@ fun WelcomeScreen(
                 drawRect(
                     brush = Brush.verticalGradient(
                         listOf(
-                            Color(0xFF6E8E92).copy(alpha = .62f * lakeIn),
-                            Color(0xFF33544D).copy(alpha = .72f * lakeIn),
+                            Color(0xFF123537).copy(alpha = .90f * lakeIn),
+                            Color(0xFF071A1B).copy(alpha = .96f * lakeIn),
                         ),
                         startY = lakeTop,
                         endY = lakeBottom,
@@ -200,7 +199,7 @@ fun WelcomeScreen(
                     val y = lakeTop + (lakeBottom - lakeTop) * (.18f + index * .17f)
                     val half = w * (.30f - index * .04f) * lakeIn
                     drawLine(
-                        color = Color.White.copy(alpha = (.20f - index * .03f) * lakeIn * shimmer),
+                        color = SageSignalCyan.copy(alpha = (.22f - index * .03f) * lakeIn * shimmer),
                         start = Offset(w * .72f - half, y),
                         end = Offset(w * .72f + half, y),
                         strokeWidth = 2.dp.toPx(),
@@ -244,8 +243,8 @@ fun WelcomeScreen(
                 val measure = PathMeasure().apply { setPath(trail, false) }
                 val visible = Path()
                 measure.getSegment(0f, measure.length * trailIn, visible, true)
-                drawPath(visible, Color(0xFFE8DCC0).copy(alpha = .58f), style = Stroke(9.dp.toPx(), cap = StrokeCap.Round))
-                drawPath(visible, Color(0xFFF3EAD6).copy(alpha = .40f), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(visible, SageSignalLime.copy(alpha = .28f), style = Stroke(10.dp.toPx(), cap = StrokeCap.Round))
+                drawPath(visible, SageSignalLime.copy(alpha = .80f), style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
 
                 // 显影头：让「正在走进这片公园」这件事有一个可追踪的位置。
                 if (trailIn < .99f) {
@@ -262,7 +261,7 @@ fun WelcomeScreen(
                 val y = h * (.94f - phase * .62f)
                 val alpha = (1f - phase) * .34f * canopyIn
                 val radius = (1.6f + (index % 3) * .9f).dp.toPx()
-                drawCircle(Color(0xFFF0E6CC).copy(alpha = alpha), radius, Offset(x, y))
+                drawCircle(SageSignalCyan.copy(alpha = alpha), radius, Offset(x, y))
             }
         }
 
@@ -293,10 +292,10 @@ fun WelcomeScreen(
                 },
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(6.dp).background(SageOpera, CircleShape))
+                Box(Modifier.size(6.dp).background(SageSignalLime, CircleShape))
                 Text(
                     "北京 · 海淀东升 · 八家郊野公园南园",
-                    color = SageGreenDark,
+                    color = SageInk,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(start = 8.dp),
@@ -305,7 +304,7 @@ fun WelcomeScreen(
             if (participantId.isNotBlank()) {
                 Text(
                     "参与者 $participantId",
-                    color = SageGreenDark.copy(alpha = .70f),
+                    color = SageMuted,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 4.dp, start = 14.dp),
                 )
@@ -320,7 +319,7 @@ fun WelcomeScreen(
                 .statusBarsPadding()
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
-            Text("跳过", color = SageGreenDark, fontSize = 13.sp)
+            Text("跳过", color = SageSignalLime, fontSize = 13.sp)
         }
 
         // 底部：标题与进入按钮，最后落位。

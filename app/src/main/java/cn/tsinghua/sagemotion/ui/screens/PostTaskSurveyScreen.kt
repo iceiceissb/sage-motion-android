@@ -53,6 +53,9 @@ import cn.tsinghua.sagemotion.ui.theme.SageGreenDark
 import cn.tsinghua.sagemotion.ui.theme.SageInk
 import cn.tsinghua.sagemotion.ui.theme.SageMist
 import cn.tsinghua.sagemotion.ui.theme.SageMuted
+import cn.tsinghua.sagemotion.ui.theme.SageOnSignal
+import cn.tsinghua.sagemotion.ui.theme.SagePanelRaised
+import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 import cn.tsinghua.sagemotion.ui.theme.SageSurface
 
 /** 条件无关的统一任务后问卷；允许在提交前返回修改已有答案。 */
@@ -87,7 +90,7 @@ fun PostTaskSurveyScreen(
             Surface(color = SageMist, shape = RoundedCornerShape(100.dp)) {
                 Text(
                     "任务 ${performance.scenario.id} 已完成",
-                    color = SageGreenDark,
+                    color = SageSignalLime,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -112,7 +115,7 @@ fun PostTaskSurveyScreen(
         )
         LinearProgressIndicator(
             progress = { animatedProgress },
-            color = SageGreen,
+            color = SageSignalLime,
             trackColor = SageDivider,
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp).height(5.dp),
         )
@@ -133,7 +136,7 @@ fun PostTaskSurveyScreen(
             ) {
                 Text(
                     item.shortLabel,
-                    color = SageGreenDark,
+                    color = SageSignalLime,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 1.sp,
@@ -153,8 +156,8 @@ fun PostTaskSurveyScreen(
                     (1..7).forEach { value ->
                         val selected = answers[item] == value
                         Surface(
-                            color = if (selected) SageGreen else Color.White,
-                            contentColor = if (selected) Color.White else SageInk,
+                            color = if (selected) SageSignalLime else SagePanelRaised,
+                            contentColor = if (selected) SageOnSignal else SageInk,
                             shape = CircleShape,
                             shadowElevation = if (selected) 5.dp else 0.dp,
                             border = if (selected) null else androidx.compose.foundation.BorderStroke(1.dp, SageDivider),
@@ -196,9 +199,9 @@ fun PostTaskSurveyScreen(
             ) {
                 if (currentIndex == dimensions.lastIndex) {
                     Icon(Icons.Default.Check, contentDescription = null)
-                    Text("提交并继续", fontSize = 15.sp, color = Color.White, modifier = Modifier.padding(start = 6.dp))
+                    Text("提交并继续", fontSize = 15.sp, color = SageOnSignal, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
                 } else {
-                    Text("下一题", fontSize = 15.sp, color = Color.White)
+                    Text("下一题", fontSize = 15.sp, color = SageOnSignal, fontWeight = FontWeight.Bold)
                 }
             }
         }

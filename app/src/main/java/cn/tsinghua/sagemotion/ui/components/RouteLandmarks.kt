@@ -50,6 +50,8 @@ import cn.tsinghua.sagemotion.ui.theme.SageInk
 import cn.tsinghua.sagemotion.ui.theme.SageMotion
 import cn.tsinghua.sagemotion.ui.theme.SageMuted
 import cn.tsinghua.sagemotion.ui.theme.SageOpera
+import cn.tsinghua.sagemotion.ui.theme.SagePanelRaised
+import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 
 /**
  * 路线几何。主路线、备选路线与重规划路线共用同一套控制点，
@@ -144,7 +146,7 @@ fun RouteLandmarkLayer(
 @Composable
 private fun LandmarkLabel(landmark: ParkLandmark) {
     Surface(
-        color = Color.White.copy(alpha = .93f),
+        color = SagePanelRaised.copy(alpha = .96f),
         shape = RoundedCornerShape(9.dp),
         shadowElevation = 3.dp,
     ) {
@@ -427,7 +429,7 @@ fun LandmarkList(
         landmarks.forEachIndexed { index, landmark ->
             val selected = landmark.id == selectedId
             Surface(
-                color = if (selected) Color(0xFFEAF2ED) else Color.Transparent,
+                color = if (selected) SageSignalLime.copy(alpha = .11f) else Color.Transparent,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .padding(top = if (index == 0) 0.dp else 4.dp)
@@ -439,8 +441,8 @@ fun LandmarkList(
                 ) {
                     Canvas(Modifier.size(26.dp)) {
                         val center = Offset(size.width / 2f, size.height / 2f)
-                        drawCircle(if (selected) SageGreenDark else SageGreen.copy(alpha = .16f), size.minDimension * .5f, center)
-                        drawLandmarkGlyph(landmark.glyph, center, size.minDimension * .38f, if (selected) Color.White else SageGreenDark)
+                        drawCircle(if (selected) SageSignalLime.copy(alpha = .18f) else SageGreen.copy(alpha = .16f), size.minDimension * .5f, center)
+                        drawLandmarkGlyph(landmark.glyph, center, size.minDimension * .38f, if (selected) SageSignalLime else SageMuted)
                     }
                     Column(Modifier.padding(start = 10.dp).weight(1f)) {
                         Text(

@@ -72,6 +72,8 @@ import cn.tsinghua.sagemotion.ui.theme.SageOpera
 import cn.tsinghua.sagemotion.ui.theme.SagePaper
 import cn.tsinghua.sagemotion.ui.theme.SagePaperEdge
 import cn.tsinghua.sagemotion.ui.theme.SagePaperShade
+import cn.tsinghua.sagemotion.ui.theme.SagePanelRaised
+import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 import kotlin.math.sin
 
 private enum class SceneMotif { BOTANICAL, SCREEN, WATER, ARCHITECTURE, HUMAN, GENERAL }
@@ -262,10 +264,10 @@ private fun ScrapbookHeader(stats: JourneyStats, reveal: Float) {
         },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Surface(color = SageGreenDark, shape = RoundedCornerShape(100.dp)) {
+            Surface(color = SageSignalLime.copy(alpha = .14f), shape = RoundedCornerShape(100.dp)) {
                 Text(
                     "本机纸刊预览",
-                    color = Color.White,
+                    color = SageSignalLime,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
@@ -817,7 +819,7 @@ private fun CheckpointStamp(entry: ScrapEntry, appear: Float) {
             }
             Text(
                 landmark.name,
-                color = SageGreenDark,
+                color = SageSignalLime,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -862,7 +864,7 @@ private fun TapedPhotoCard(
             ),
     ) {
         Surface(
-            color = Color.White,
+            color = SagePanelRaised,
             shape = RoundedCornerShape(3.dp),
             shadowElevation = if (selected) 8.dp else 3.dp,
         ) {
@@ -939,7 +941,7 @@ private fun TapedPhotoCard(
 
 @Composable
 private fun EmptyScrapbookNote(modifier: Modifier = Modifier) {
-    Surface(color = Color.White.copy(alpha = .60f), shape = RoundedCornerShape(14.dp), modifier = modifier) {
+    Surface(color = SagePanelRaised.copy(alpha = .92f), shape = RoundedCornerShape(14.dp), modifier = modifier) {
         Text(
             "这一页还空着。下次在探索途中拍照圈搜，照片、问题和打卡点会自动贴进这本手账。",
             color = SageMuted,
@@ -989,12 +991,12 @@ private fun ScrapbookFooter(stats: JourneyStats, reveal: Float, modifier: Modifi
 
 @Composable
 private fun ScrapStat(label: String, value: String, modifier: Modifier = Modifier) {
-    Surface(color = Color.White.copy(alpha = .66f), shape = RoundedCornerShape(10.dp), modifier = modifier) {
+    Surface(color = SagePanelRaised, shape = RoundedCornerShape(10.dp), modifier = modifier) {
         Column(
             Modifier.padding(vertical = 7.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(value, color = SageGreenDark, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(value, color = SageSignalLime, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Text(label, color = SageMuted, fontSize = 9.sp)
         }
     }

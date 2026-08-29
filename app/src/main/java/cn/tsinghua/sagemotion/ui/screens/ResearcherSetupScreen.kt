@@ -43,6 +43,9 @@ import cn.tsinghua.sagemotion.ui.theme.SageGreen
 import cn.tsinghua.sagemotion.ui.theme.SageInk
 import cn.tsinghua.sagemotion.ui.theme.SageMist
 import cn.tsinghua.sagemotion.ui.theme.SageMuted
+import cn.tsinghua.sagemotion.ui.theme.SagePanelRaised
+import cn.tsinghua.sagemotion.ui.theme.SageSignalCyan
+import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 import cn.tsinghua.sagemotion.ui.theme.SageSurface
 
 @Composable
@@ -74,7 +77,7 @@ fun ResearcherSetupScreen(
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = null,
-                    tint = SageGreen,
+                    tint = SageSignalLime,
                     modifier = Modifier.size(30.dp),
                 )
             }
@@ -87,15 +90,15 @@ fun ResearcherSetupScreen(
             )
             Text(
                 text = "研究员设置",
-                color = Color(0xFF6C7671),
+                color = SageSignalCyan,
                 fontSize = 14.sp,
                 modifier = Modifier.padding(top = 6.dp, bottom = 28.dp),
             )
 
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                colors = CardDefaults.cardColors(containerColor = SagePanelRaised),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text("参与者编号", fontWeight = FontWeight.Medium, color = SageInk)
@@ -142,14 +145,14 @@ fun ResearcherSetupScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 ) {
-                    Icon(Icons.Default.Storage, null, tint = SageGreen, modifier = Modifier.size(16.dp))
-                    Text(statusMessage, color = SageGreen, fontSize = 12.sp, modifier = Modifier.padding(start = 7.dp))
+                    Icon(Icons.Default.Storage, null, tint = SageSignalCyan, modifier = Modifier.size(16.dp))
+                    Text(statusMessage, color = SageSignalCyan, fontSize = 12.sp, modifier = Modifier.padding(start = 7.dp))
                 }
             }
             Text(
                 text = "主界面长按顶部状态条 1 秒，可打开研究员控制台。",
                 fontSize = 12.sp,
-                color = Color(0xFF7A837F),
+                color = SageMuted,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()

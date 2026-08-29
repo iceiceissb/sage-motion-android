@@ -3,7 +3,7 @@ package cn.tsinghua.sagemotion.ui.theme
 import android.app.Activity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
@@ -14,28 +14,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
-// ---- 品牌基色：林冠绿 ----
-val SageGreen = Color(0xFF3F6F5C)
-val SageGreenDark = Color(0xFF294E40)
+// ---- 品牌基色：数字公园信号层 ----
+val SageGreen = Color(0xFF3F7561)
+val SageGreenDark = Color(0xFF173A2E)
 
 /** 更深的林冠色，用于覆盖在真实场景之上的深色浮层，保证白字对比度。 */
-val SageCanopy = Color(0xFF16302A)
-val SageMist = Color(0xFFDCE8E1)
-val SageSurface = Color(0xFFF8F7F3)
-val SageInk = Color(0xFF26332F)
-val SageMuted = Color(0xFF68736E)
-val SageDivider = Color(0xFFD9DEDA)
+val SageCanopy = Color(0xFF07100E)
+val SageSurface = Color(0xFF050806)
+val SagePanel = Color(0xFF0B1210)
+val SagePanelRaised = Color(0xFF111A17)
+val SagePanelSoft = Color(0xFF18241F)
+val SageMist = SagePanelSoft
+val SageInk = Color(0xFFF2F6F3)
+val SageMuted = Color(0xFF9AA7A0)
+val SageDivider = Color(0xFF304039)
 
 // ---- 语义保留色 ----
 /** 不确定性专用赭色。只表达信息缺口与能力边界，不得用作装饰。 */
 val SageOchre = Color(0xFFB86B2C)
-val SageWarningSurface = Color(0xFFFFF3E8)
+val SageWarningSurface = Color(0xFF2B1713)
 
 // ---- 手账拼贴层 ----
 /** 手账纸底。对应设计建议「手账拼贴画的形式，路线+照片+小标题文字」。 */
-val SagePaper = Color(0xFFF5F0E4)
-val SagePaperEdge = Color(0xFFE3D9C4)
-val SagePaperShade = Color(0xFFEDE5D4)
+val SagePaper = Color(0xFF0D1512)
+val SagePaperEdge = Color(0xFF33433B)
+val SagePaperShade = Color(0xFF131D19)
 
 /**
  * 戏曲朱红。八家郊野公园南园以戏曲文化为主题，这里作为手账贴纸与地标的装饰色。
@@ -53,7 +56,7 @@ val SageCobalt = Color(0xFF315FBE)
 val SageForestInk = Color(0xFF173D32)
 
 /** 纸面辅助文字，避免灰色与真实地图混在一起。 */
-val SagePaperMuted = Color(0xFF756F61)
+val SagePaperMuted = SageMuted
 
 // ---- 数字公园信号层 ----
 /** 地图 HUD 的深墨底；只用于空间界面叠层，不替换真实高德底图。 */
@@ -70,33 +73,36 @@ val SageSignalCyan = Color(0xFF39DDD6)
 /** 备选路线、警示与重规划；不承担普通装饰。 */
 val SageSignalCoral = Color(0xFFFF7466)
 
+/** 荧光主操作上的深色文字与图标。 */
+val SageOnSignal = Color(0xFF08110F)
+
 // ---- 开屏与天光 ----
 val SageSky = Color(0xFFCADCE2)
 val SageDawn = Color(0xFFE8D9C0)
 
-private val SageColorScheme = lightColorScheme(
-    primary = SageGreen,
-    onPrimary = Color.White,
-    primaryContainer = SageMist,
-    onPrimaryContainer = SageGreenDark,
-    secondary = Color(0xFF718C80),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE4EDE7),
-    onSecondaryContainer = SageGreenDark,
-    tertiary = SageOchre,
-    onTertiary = Color.White,
+private val SageColorScheme = darkColorScheme(
+    primary = SageSignalLime,
+    onPrimary = SageOnSignal,
+    primaryContainer = SagePanelSoft,
+    onPrimaryContainer = SageSignalLime,
+    secondary = SageSignalCyan,
+    onSecondary = SageOnSignal,
+    secondaryContainer = Color(0xFF102825),
+    onSecondaryContainer = SageSignalCyan,
+    tertiary = SageSignalCoral,
+    onTertiary = SageOnSignal,
     tertiaryContainer = SageWarningSurface,
-    onTertiaryContainer = Color(0xFF7A4A20),
+    onTertiaryContainer = SageSignalCoral,
     background = SageSurface,
     onBackground = SageInk,
-    surface = SageSurface,
+    surface = SagePanel,
     onSurface = SageInk,
-    surfaceVariant = Color(0xFFEFF2EF),
+    surfaceVariant = SagePanelSoft,
     onSurfaceVariant = SageMuted,
     outline = SageDivider,
-    outlineVariant = Color(0xFFE6EAE7),
-    error = Color(0xFF9E3F34),
-    onError = Color.White,
+    outlineVariant = Color(0xFF202D28),
+    error = SageSignalCoral,
+    onError = SageOnSignal,
 )
 
 /**
@@ -122,8 +128,8 @@ fun SageMotionTheme(content: @Composable () -> Unit) {
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = true
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
         }
     }
     MaterialTheme(

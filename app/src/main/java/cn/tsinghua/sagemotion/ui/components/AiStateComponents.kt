@@ -50,6 +50,11 @@ import cn.tsinghua.sagemotion.ui.theme.SageMist
 import cn.tsinghua.sagemotion.ui.theme.SageMotion
 import cn.tsinghua.sagemotion.ui.theme.SageMuted
 import cn.tsinghua.sagemotion.ui.theme.SageOchre
+import cn.tsinghua.sagemotion.ui.theme.SageOnSignal
+import cn.tsinghua.sagemotion.ui.theme.SagePanelRaised
+import cn.tsinghua.sagemotion.ui.theme.SagePanelSoft
+import cn.tsinghua.sagemotion.ui.theme.SageSignalCoral
+import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
 import cn.tsinghua.sagemotion.ui.theme.SageWarningSurface
 import kotlin.math.PI
 import kotlin.math.abs
@@ -78,7 +83,7 @@ fun ReasoningRing(
     modifier: Modifier = Modifier,
     evidenceCount: Int = 0,
     evidenceTotal: Int = 5,
-    accent: Color = SageGreen,
+    accent: Color = SageSignalLime,
     uncertain: Boolean = false,
 ) {
     val transition = rememberInfiniteTransition(label = "reasoningRing")
@@ -168,7 +173,7 @@ fun ListeningBubble(
     inputLevel: Float,
     modifier: Modifier = Modifier,
     active: Boolean = true,
-    accent: Color = SageGreen,
+    accent: Color = SageSignalLime,
 ) {
     val transition = rememberInfiniteTransition(label = "listeningBubble")
     val ripple by transition.animateFloat(
@@ -240,7 +245,7 @@ fun GeneratingCard(
     title: String,
     lineCount: Int = 3,
     modifier: Modifier = Modifier,
-    accent: Color = SageGreen,
+    accent: Color = SageSignalLime,
 ) {
     val transition = rememberInfiniteTransition(label = "generatingCard")
     val sweep by transition.animateFloat(
@@ -250,7 +255,7 @@ fun GeneratingCard(
         label = "generatingSweep",
     )
     Surface(
-        color = Color.White.copy(alpha = .96f),
+        color = SagePanelRaised.copy(alpha = .96f),
         shape = RoundedCornerShape(20.dp),
         shadowElevation = 6.dp,
         modifier = modifier.fillMaxWidth(),
@@ -313,7 +318,7 @@ fun AiFloatingBadge(
     label: String,
     modifier: Modifier = Modifier,
     active: Boolean = false,
-    accent: Color = SageGreen,
+    accent: Color = SageSignalLime,
 ) {
     val transition = rememberInfiniteTransition(label = "aiBadge")
     val glow by transition.animateFloat(
@@ -323,7 +328,7 @@ fun AiFloatingBadge(
         label = "aiBadgeGlow",
     )
     Surface(
-        color = SageGreenDark.copy(alpha = .92f),
+        color = SagePanelRaised.copy(alpha = .96f),
         shape = RoundedCornerShape(14.dp),
         modifier = modifier,
     ) {
@@ -335,7 +340,7 @@ fun AiFloatingBadge(
                 if (active) {
                     drawCircle(accent.copy(alpha = glow * .5f), size.minDimension * .5f)
                 }
-                drawCircle(Color(0xFF9DE0B6), size.minDimension * .28f)
+                drawCircle(SageSignalLime, size.minDimension * .28f)
             }
             Text(
                 label,
@@ -361,7 +366,7 @@ fun CompletionSeal(
     visible: Boolean,
     label: String,
     modifier: Modifier = Modifier,
-    accent: Color = SageGreen,
+    accent: Color = SageSignalLime,
 ) {
     var played by remember { mutableStateOf(false) }
     LaunchedEffect(visible) { if (visible) played = true }
@@ -450,14 +455,14 @@ fun ModelBoundaryChip(
                 }
                 Text(
                     "能力边界",
-                    color = Color(0xFF7A4A20),
+                    color = SageSignalCoral,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(start = 7.dp),
                 )
             }
-            BoundaryLine("可以判断", canDo, SageGreenDark, filled = true)
-            BoundaryLine("无法判断", cannotDo, SageOchre, filled = false)
+            BoundaryLine("可以判断", canDo, SageSignalLime, filled = true)
+            BoundaryLine("无法判断", cannotDo, SageSignalCoral, filled = false)
         }
     }
 }
@@ -520,7 +525,7 @@ fun StageChips(
                     current && uncertain -> SageWarningSurface
                     current -> SageMist
                     done -> SageMist.copy(alpha = .55f)
-                    else -> Color(0xFFF1F3F1)
+                    else -> SagePanelSoft
                 },
                 shape = RoundedCornerShape(9.dp),
                 modifier = Modifier.weight(weight),
@@ -532,9 +537,9 @@ fun StageChips(
                 ) {
                     Canvas(Modifier.size(6.dp)) {
                         when {
-                            done -> drawCircle(SageGreen)
-                            current && uncertain -> drawCircle(SageOchre)
-                            current -> drawCircle(SageGreen, style = Stroke(1.4.dp.toPx()))
+                            done -> drawCircle(SageSignalLime)
+                            current && uncertain -> drawCircle(SageSignalCoral)
+                            current -> drawCircle(SageSignalLime, style = Stroke(1.4.dp.toPx()))
                             else -> drawCircle(SageMuted.copy(alpha = .35f), style = Stroke(1.dp.toPx()))
                         }
                     }
@@ -544,8 +549,8 @@ fun StageChips(
                         fontSize = 10.sp,
                         maxLines = 1,
                         color = when {
-                            current && uncertain -> SageOchre
-                            current || done -> SageGreenDark
+                            current && uncertain -> SageSignalCoral
+                            current || done -> SageSignalLime
                             else -> SageMuted
                         },
                         fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal,

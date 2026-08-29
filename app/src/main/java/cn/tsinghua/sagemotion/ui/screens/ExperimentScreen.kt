@@ -165,6 +165,10 @@ import cn.tsinghua.sagemotion.ui.theme.SageInk
 import cn.tsinghua.sagemotion.ui.theme.SageMist
 import cn.tsinghua.sagemotion.ui.theme.SageMuted
 import cn.tsinghua.sagemotion.ui.theme.SageOchre
+import cn.tsinghua.sagemotion.ui.theme.SageOnSignal
+import cn.tsinghua.sagemotion.ui.theme.SagePanel
+import cn.tsinghua.sagemotion.ui.theme.SagePanelRaised
+import cn.tsinghua.sagemotion.ui.theme.SagePanelSoft
 import cn.tsinghua.sagemotion.ui.theme.SageSignalCoral
 import cn.tsinghua.sagemotion.ui.theme.SageSignalCyan
 import cn.tsinghua.sagemotion.ui.theme.SageSignalLime
@@ -716,13 +720,13 @@ private fun RouteConstraintCard(
                     Text("先约束，再推荐", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text("选择偏好，也可以直接说出今天的需求", color = SageMuted, fontSize = 11.sp)
                 }
-                Surface(color = SageGreen.copy(alpha = .10f), shape = RoundedCornerShape(9.dp)) {
-                    Text("告诉银小叶", color = SageGreenDark, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
+                Surface(color = SageSignalLime.copy(alpha = .10f), shape = RoundedCornerShape(9.dp)) {
+                    Text("告诉银小叶", color = SageSignalLime, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
                 }
             }
             listOf(
-                listOf(Triple("shade", "阴凉优先", Color(0xFFEAF5D7)), Triple("rest", "沿途有座椅", Color(0xFFFFE9D9))),
-                listOf(Triple("short", "路程更短", Color(0xFFE3F0F4)), Triple("quiet", "避开人群", Color(0xFFECE7F4))),
+                listOf(Triple("shade", "阴凉优先", SagePanelRaised), Triple("rest", "沿途有座椅", SagePanelRaised)),
+                listOf(Triple("short", "路程更短", SagePanelRaised), Triple("quiet", "避开人群", SagePanelRaised)),
             ).forEachIndexed { rowIndex, row ->
                 Row(Modifier.fillMaxWidth().padding(top = 7.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEachIndexed { columnIndex, (id, label, tint) ->
@@ -736,7 +740,7 @@ private fun RouteConstraintCard(
                             if (id in selectedIds) {
                                 Icon(Icons.Default.Check, null, Modifier.size(15.dp))
                             } else {
-                                Box(Modifier.size(8.dp).background(SageGreen.copy(alpha = .28f), CircleShape))
+                                Box(Modifier.size(8.dp).background(SageHudMuted.copy(alpha = .52f), CircleShape))
                             }
                             Text(label, maxLines = 1, fontSize = 11.sp, modifier = Modifier.padding(start = 7.dp))
                         }
@@ -755,21 +759,21 @@ private fun RouteConstraintCard(
                 IconButton(
                     onClick = speech.onToggle,
                     modifier = Modifier.padding(start = 7.dp).size(48.dp).background(
-                        if (speech.isListening) SageGreen else SageMist,
+                        if (speech.isListening) SageSignalCyan else SageMist,
                         CircleShape,
                     ),
                 ) {
-                    Icon(Icons.Default.Mic, "语音输入路线约束", tint = if (speech.isListening) Color.White else SageGreenDark)
+                    Icon(Icons.Default.Mic, "语音输入路线约束", tint = if (speech.isListening) SageOnSignal else SageSignalCyan)
                 }
             }
-            Text(speech.status, color = if (speech.isListening) SageGreenDark else SageMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(speech.status, color = if (speech.isListening) SageSignalCyan else SageMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
             Button(
                 onClick = onRun,
                 enabled = !speech.isListening,
                 modifier = Modifier.fillMaxWidth().padding(top = 9.dp).height(52.dp),
                 shape = sageBubbleShape(1),
             ) {
-                Text(if (text.isBlank()) "按这些偏好推荐合适路线" else "确认约束并推荐路线", fontSize = 15.sp, color = Color.White)
+                Text(if (text.isBlank()) "按这些偏好推荐合适路线" else "确认约束并推荐路线", fontSize = 15.sp, color = SageOnSignal, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -923,7 +927,8 @@ private fun PromptBubble(text: String) {
         modifier = Modifier
             .padding(top = 12.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(Color.White.copy(alpha = .90f))
+            .background(SagePanelRaised.copy(alpha = .96f))
+            .border(1.dp, SageHudEdge, RoundedCornerShape(18.dp))
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -943,7 +948,7 @@ private fun StartCard(title: String, actionLabel: String, onRun: () -> Unit, mod
             Text(title, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = SageInk)
             Text("点击后将播放本条件的完整 AI 反馈过程。", color = SageMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 5.dp, bottom = 16.dp))
             Button(onClick = onRun, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(17.dp)) {
-                Text(actionLabel, fontSize = 16.sp, color = Color.White)
+                Text(actionLabel, fontSize = 16.sp, color = SageOnSignal, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -960,7 +965,7 @@ private fun VisualStartCard(
 ) {
     FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        tint = Color(0xFFEAF3EC),
+        tint = SagePanelRaised,
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp)) {
@@ -972,14 +977,14 @@ private fun VisualStartCard(
                 modifier = Modifier.padding(top = 5.dp),
             )
             if (findings.isNotBlank()) {
-                Text(findings, color = SageGreenDark, fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp).background(SageMist, RoundedCornerShape(10.dp)).padding(8.dp))
+                Text(findings, color = SageSignalLime, fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp).background(SageMist, RoundedCornerShape(10.dp)).padding(8.dp))
             }
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 OutlinedButton(onClick = onCapture, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(17.dp)) {
                     Icon(Icons.Default.CameraAlt, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text(if (hasPhoto) "重拍" else "实际拍照")
                 }
                 Button(onClick = onRun, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(17.dp)) {
-                    Text("开始识别", color = Color.White)
+                    Text("开始识别", color = SageOnSignal, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -998,7 +1003,7 @@ private fun VoiceStartCard(
 ) {
     FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        tint = Color(0xFFE7F0F5),
+        tint = SagePanelRaised,
         modifier = modifier.fillMaxWidth().imePadding(),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp)) {
@@ -1025,20 +1030,20 @@ private fun VoiceStartCard(
                 IconButton(
                     onClick = onListen,
                     modifier = Modifier.padding(start = 7.dp).size(48.dp).background(
-                        if (isListening) SageGreen else SageMist,
+                        if (isListening) SageSignalCyan else SageMist,
                         CircleShape,
                     ),
                 ) {
                     Icon(
                         Icons.Default.Mic,
                         if (isListening) "结束语音输入" else "开始语音输入",
-                        tint = if (isListening) Color.White else SageGreenDark,
+                        tint = if (isListening) SageOnSignal else SageSignalCyan,
                     )
                 }
             }
             Text(
                 speechStatus,
-                color = if (isListening) SageGreenDark else SageMuted,
+                color = if (isListening) SageSignalCyan else SageMuted,
                 fontSize = 10.sp,
                 modifier = Modifier.padding(top = 4.dp),
             )
@@ -1048,7 +1053,7 @@ private fun VoiceStartCard(
                 modifier = Modifier.fillMaxWidth().padding(top = 9.dp).height(52.dp),
                 shape = RoundedCornerShape(17.dp),
             ) {
-                Text("确认问题并回答", color = Color.White)
+                Text("确认问题并回答", color = SageOnSignal, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -1253,12 +1258,12 @@ private fun RouteChoiceCard(
 
 @Composable
 private fun MetricCard(title: String, detail: String, modifier: Modifier = Modifier) {
-    Surface(color = Color(0xFFF0F4F1), shape = RoundedCornerShape(15.dp), modifier = modifier) {
+    Surface(color = SagePanelSoft, shape = RoundedCornerShape(15.dp), modifier = modifier) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(horizontal = 5.dp, vertical = 9.dp),
         ) {
-            Text(title, color = SageGreenDark, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(title, color = SageSignalLime, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
             Text(detail, color = SageMuted, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(top = 3.dp))
         }
     }
@@ -1278,14 +1283,14 @@ private fun RouteCompetitionCard(stage: AiStage, condition: ExperimentCondition)
         label = "routeScoreProgress",
     )
     Surface(
-        color = Color.White.copy(alpha = .91f),
+        color = SagePanelRaised.copy(alpha = .96f),
         shape = RoundedCornerShape(24.dp),
         shadowElevation = 10.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).background(SageGreen, CircleShape))
+                Box(Modifier.size(8.dp).background(SageSignalLime, CircleShape))
                 Text("两条候选路线正在竞争", color = SageInk, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp).weight(1f))
                 Text(
                     when (stage) {
@@ -1298,12 +1303,12 @@ private fun RouteCompetitionCard(stage: AiStage, condition: ExperimentCondition)
                     fontSize = 10.sp,
                 )
             }
-            CandidateRouteRow("湖边林荫线", "遮阴 · 座椅 · 人流", progress, SageGreen, Modifier.padding(top = 13.dp))
+            CandidateRouteRow("湖边林荫线", "遮阴 · 座椅 · 人流", progress, SageSignalLime, Modifier.padding(top = 13.dp))
             CandidateRouteRow(
                 "草坪外环线",
                 if (condition == ExperimentCondition.SAGE_FULL) "开阔 · 较远 · 部分数据缺口" else "开阔 · 较远 · 风景",
                 (progress * .86f).coerceAtMost(.84f),
-                SageOchre,
+                SageSignalCoral,
                 Modifier.padding(top = 11.dp),
             )
         }
@@ -1377,7 +1382,7 @@ private fun VisualExperiment(
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .12f)))
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .30f)))
         if (state.isRunning || state.resultVisible) {
             VisualSemanticMotion(stage = state.aiStage, condition = state.condition)
         }
@@ -1480,18 +1485,18 @@ private fun VisionFindingBubbleLayer(findings: List<VisionFinding>) {
     val inspection = LocalInspectionMode.current
     val positions = listOf(.08f to .20f, .64f to .31f, .20f to .47f, .66f to .56f, .40f to .67f)
     val bubbleColors = listOf(
-        Color(0xFFDDEEDC),
-        Color(0xFFFFE8D2),
-        Color(0xFFDDEAF4),
-        Color(0xFFF0E2F1),
-        Color(0xFFFFF0C9),
+        SagePanelRaised,
+        Color(0xFF111B18),
+        Color(0xFF0D1918),
+        Color(0xFF181412),
+        Color(0xFF11170D),
     )
     val accentColors = listOf(
-        Color(0xFF4A8C69),
-        Color(0xFFCB7B42),
-        Color(0xFF527E9F),
-        Color(0xFF936A96),
-        Color(0xFFC39834),
+        SageSignalLime,
+        SageSignalCoral,
+        SageSignalCyan,
+        Color(0xFFA7BEFF),
+        Color(0xFFFFC45B),
     )
     BoxWithConstraints(Modifier.fillMaxSize().padding(top = 148.dp, bottom = 270.dp, start = 10.dp, end = 10.dp)) {
         visibleFindings.forEachIndexed { index, finding ->
@@ -1499,7 +1504,7 @@ private fun VisionFindingBubbleLayer(findings: List<VisionFinding>) {
             val bubbleSize = (78f + finding.confidence.coerceIn(.5f, 1f) * 16f).dp
             val accent = accentColors[index % accentColors.size]
             Surface(
-                color = bubbleColors[index % bubbleColors.size].copy(alpha = .82f),
+                color = bubbleColors[index % bubbleColors.size].copy(alpha = .94f),
                 contentColor = SageInk,
                 shape = CircleShape,
                 shadowElevation = 4.dp,
@@ -1509,7 +1514,7 @@ private fun VisionFindingBubbleLayer(findings: List<VisionFinding>) {
                     .graphicsLayer {
                         translationY = if (inspection) 0f else floatY * if (index % 2 == 0) 1f else -.72f
                     }
-                    .border(1.dp, Color.White.copy(alpha = .88f), CircleShape),
+                    .border(1.dp, accent.copy(alpha = .58f), CircleShape),
             ) {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 10.dp),
@@ -1617,7 +1622,7 @@ private fun CircleSearchPanel(
         else -> 0
     }
     FrostedGlassSurface(
-        tint = Color(0xFFF2F6EF),
+        tint = SagePanelRaised,
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
         modifier = Modifier.fillMaxWidth().imePadding(),
     ) {
@@ -1631,7 +1636,7 @@ private fun CircleSearchPanel(
                     0 -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(color = SageMist, shape = CircleShape) {
-                                Icon(Icons.Default.Gesture, null, tint = SageGreenDark, modifier = Modifier.padding(9.dp).size(21.dp))
+                                Icon(Icons.Default.Gesture, null, tint = SageSignalLime, modifier = Modifier.padding(9.dp).size(21.dp))
                             }
                             Column(Modifier.padding(start = 11.dp).weight(1f)) {
                                 Text("圈出你想问的部分", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
@@ -1641,14 +1646,22 @@ private fun CircleSearchPanel(
                         }
                         Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.weight(1f).height(5.dp).background(SageMist, CircleShape)) {
-                                Box(Modifier.fillMaxWidth(.66f).height(5.dp).background(Brush.horizontalGradient(listOf(SageGreen, Color(0xFF8BCFA4))), CircleShape))
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth(.66f)
+                                        .height(5.dp)
+                                        .background(
+                                            brush = Brush.horizontalGradient(listOf(SageSignalLime, SageSignalCyan)),
+                                            shape = CircleShape,
+                                        ),
+                                )
                             }
-                            Text("识别 → 圈选 → 提问", color = SageGreenDark, fontSize = 10.sp, modifier = Modifier.padding(start = 10.dp))
+                            Text("识别 → 圈选 → 提问", color = SageSignalLime, fontSize = 10.sp, modifier = Modifier.padding(start = 10.dp))
                         }
                     }
                     1 -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Search, null, tint = SageGreen, modifier = Modifier.size(22.dp))
+                            Icon(Icons.Default.Search, null, tint = SageSignalLime, modifier = Modifier.size(22.dp))
                             Column(Modifier.padding(start = 9.dp).weight(1f)) {
                                 Text("想了解“$subject”的什么？", color = SageInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                                 Text("点击推荐问题会直接向 AI 提问", color = SageMuted, fontSize = 10.sp)
@@ -1678,20 +1691,20 @@ private fun CircleSearchPanel(
                             IconButton(
                                 onClick = questionSpeech.onToggle,
                                 modifier = Modifier.padding(start = 7.dp).size(48.dp).background(
-                                    if (questionSpeech.isListening) SageGreen else SageMist,
+                                    if (questionSpeech.isListening) SageSignalCyan else SageMist,
                                     CircleShape,
                                 ),
                             ) {
                                 Icon(
                                     Icons.Default.Mic,
                                     if (questionSpeech.isListening) "完成语音问题" else "语音输入问题",
-                                    tint = if (questionSpeech.isListening) Color.White else SageGreenDark,
+                                    tint = if (questionSpeech.isListening) SageOnSignal else SageSignalCyan,
                                 )
                             }
                         }
                         Text(
                             questionSpeech.status,
-                            color = if (questionSpeech.isListening) SageGreenDark else SageMuted,
+                            color = if (questionSpeech.isListening) SageSignalCyan else SageMuted,
                             fontSize = 10.sp,
                             modifier = Modifier.padding(top = 4.dp),
                         )
@@ -1703,16 +1716,16 @@ private fun CircleSearchPanel(
                         ) {
                             Icon(Icons.Default.Search, null, Modifier.size(17.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("确认问题并提问", color = Color.White)
+                            Text("确认问题并提问", color = SageOnSignal, fontWeight = FontWeight.Bold)
                         }
                     }
                     else -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(color = SageMist, shape = CircleShape) {
-                                Icon(Icons.Default.AutoAwesome, null, tint = SageGreenDark, modifier = Modifier.padding(9.dp).size(20.dp))
+                                Icon(Icons.Default.AutoAwesome, null, tint = SageSignalLime, modifier = Modifier.padding(9.dp).size(20.dp))
                             }
                             Column(Modifier.padding(start = 10.dp).weight(1f)) {
-                                Text(question, color = SageGreenDark, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(question, color = SageSignalLime, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                 Text("AI 圈搜解答", color = SageMuted, fontSize = 10.sp)
                             }
                             TextButton(onClick = onClear) { Text("换个区域") }
@@ -1722,7 +1735,7 @@ private fun CircleSearchPanel(
                             if (onEvidence != null) {
                                 OutlinedButton(onClick = onEvidence, modifier = Modifier.weight(.72f).height(49.dp), shape = RoundedCornerShape(15.dp)) { Text("查看依据") }
                             }
-                            Button(onClick = onAdopt, modifier = Modifier.weight(1.28f).height(49.dp), shape = RoundedCornerShape(15.dp)) { Text("保存到游记并返回", color = Color.White) }
+                            Button(onClick = onAdopt, modifier = Modifier.weight(1.28f).height(49.dp), shape = RoundedCornerShape(15.dp)) { Text("保存到游记并返回", color = SageOnSignal, fontWeight = FontWeight.Bold) }
                         }
                     }
                 }
@@ -1735,14 +1748,14 @@ private fun CircleSearchPanel(
 private fun VisionSignalCard(state: ExperimentUiState) {
     val tokens = state.visionFindings.take(3).map { it.label }.ifEmpty { listOf("场景结构", "主体轮廓", "表面特征") }
     Surface(
-        color = Color(0xFF172620).copy(alpha = .87f),
+        color = SagePanelRaised.copy(alpha = .94f),
         shape = RoundedCornerShape(22.dp),
         shadowElevation = 10.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(horizontal = 15.dp, vertical = 13.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).background(Color(0xFF9DE0B6), CircleShape))
+                Box(Modifier.size(8.dp).background(SageSignalLime, CircleShape))
                 AnimatedContent(targetState = state.aiStage, label = "visionSignalTitle") { stage ->
                     Text(
                         when (stage) {
@@ -1762,7 +1775,7 @@ private fun VisionSignalCard(state: ExperimentUiState) {
             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 tokens.forEachIndexed { index, token ->
                     Surface(
-                        color = if (index == 0) SageGreen.copy(alpha = .42f) else Color.White.copy(alpha = .10f),
+                        color = if (index == 0) SageSignalLime.copy(alpha = .16f) else SagePanelSoft,
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f),
                     ) {
@@ -1825,13 +1838,13 @@ private fun VoiceExperiment(
     } else {
         rememberRealSpeechInputState(state.voiceTranscript, onVoiceTranscript)
     }
-    Box(Modifier.fillMaxSize().background(Color(0xFFE8ECE8))) {
+    Box(Modifier.fillMaxSize().background(SageSurface)) {
         AmapParkMap(
             contentDescription = null,
-            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = .48f },
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = .38f },
             gesturesEnabled = false,
         )
-        Box(Modifier.fillMaxSize().background(Color(0xFFDCE6E0).copy(alpha = .54f)))
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .68f)))
         if (state.isRunning || state.resultVisible || speechInput.isListening) {
             VoiceSemanticField(stage = if (speechInput.isListening) AiStage.LISTENING else state.aiStage, condition = state.condition, inputLevel = speechInput.level)
         }
@@ -1924,7 +1937,7 @@ private fun CreateExperiment(
     onResearcherPanel: () -> Unit,
     onBack: () -> Unit,
 ) {
-    Box(Modifier.fillMaxSize().background(Color(0xFFF2F0E8))) {
+    Box(Modifier.fillMaxSize().background(SageSurface)) {
         MemoryWeaveMotion(
             stage = state.aiStage,
             condition = state.condition,
@@ -1982,13 +1995,13 @@ private fun JourneyPreviewCard(state: ExperimentUiState) {
         else -> 0
     }
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = .94f)),
+        colors = CardDefaults.cardColors(containerColor = SagePanelRaised.copy(alpha = .96f)),
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 34.dp),
     ) {
         Column(Modifier.padding(17.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AutoAwesome, null, tint = SageGreen, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.AutoAwesome, null, tint = SageSignalLime, modifier = Modifier.size(20.dp))
                 Text("正在编织今日旅程", color = SageInk, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
             }
             JourneyRoutePreview(
@@ -2023,15 +2036,15 @@ private fun JourneyPreviewCard(state: ExperimentUiState) {
                             scaleY = .97f + rowProgress * .03f
                         },
                 ) {
-                    Surface(color = if (active) SageMist else Color(0xFFF1F2EF), shape = CircleShape) {
-                        Icon(item.first, null, tint = if (active) SageGreen else SageMuted, modifier = Modifier.padding(8.dp).size(17.dp))
+                    Surface(color = if (active) SageSignalLime.copy(alpha = .12f) else SagePanelSoft, shape = CircleShape) {
+                        Icon(item.first, null, tint = if (active) SageSignalLime else SageMuted, modifier = Modifier.padding(8.dp).size(17.dp))
                     }
                     Column(Modifier.padding(start = 10.dp).weight(1f)) {
                         Text(item.second, color = if (active) SageInk else SageMuted, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         Text(item.third, color = SageMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp))
                     }
                     AnimatedVisibility(active, enter = fadeIn() + slideInHorizontally { it / 2 }) {
-                        Icon(Icons.Default.Check, null, tint = SageGreen, modifier = Modifier.size(17.dp))
+                        Icon(Icons.Default.Check, null, tint = SageSignalLime, modifier = Modifier.size(17.dp))
                     }
                 }
             }
@@ -2074,10 +2087,10 @@ private fun JourneyRoutePreview(
         animationSpec = tween(1100),
         label = "journeyRouteReveal",
     )
-    Box(modifier.clip(RoundedCornerShape(18.dp)).background(Color(0xFFE8EEE9))) {
+    Box(modifier.clip(RoundedCornerShape(18.dp)).background(SagePanelSoft)) {
         AmapParkMap(
             contentDescription = null,
-            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = .28f },
+            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = .42f },
             gesturesEnabled = false,
         )
         Canvas(Modifier.fillMaxSize()) {
@@ -2086,11 +2099,11 @@ private fun JourneyRoutePreview(
                 cubicTo(size.width * .24f, size.height * .38f, size.width * .38f, size.height * .78f, size.width * .57f, size.height * .43f)
                 cubicTo(size.width * .70f, size.height * .18f, size.width * .82f, size.height * .18f, size.width * .94f, size.height * .28f)
             }
-            drawPath(fullPath, Color.White.copy(alpha = .92f), style = Stroke(width = 11f, cap = StrokeCap.Round))
+            drawPath(fullPath, Color.Black.copy(alpha = .78f), style = Stroke(width = 11f, cap = StrokeCap.Round))
             val measure = PathMeasure().apply { setPath(fullPath, false) }
             val visiblePath = Path()
             measure.getSegment(0f, measure.length * routeProgress, visiblePath, true)
-            drawPath(visiblePath, SageGreen, style = Stroke(width = 6f, cap = StrokeCap.Round))
+            drawPath(visiblePath, SageSignalLime, style = Stroke(width = 6f, cap = StrokeCap.Round))
         }
         BoxWithConstraints(Modifier.fillMaxSize()) {
             moments.take(5).forEachIndexed { index, moment ->
@@ -2111,11 +2124,11 @@ private fun JourneyRoutePreview(
                             scaleX = .68f + nodeProgress * .32f
                             scaleY = .68f + nodeProgress * .32f
                         }
-                        .border(3.dp, Color.White, CircleShape),
+                        .border(3.dp, SageSignalLime, CircleShape),
                 )
             }
         }
-        Surface(color = SageGreenDark.copy(alpha = .90f), shape = RoundedCornerShape(10.dp), modifier = Modifier.align(Alignment.TopStart).padding(9.dp)) {
+        Surface(color = SagePanel.copy(alpha = .94f), shape = RoundedCornerShape(10.dp), modifier = Modifier.align(Alignment.TopStart).padding(9.dp)) {
             Text("路线正在串联 ${moments.size} 个发现", color = Color.White, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
         }
     }
@@ -2148,7 +2161,7 @@ private fun JourneyRoutePanel(
     }
     Surface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        color = Color(0xFFF8F4E9).copy(alpha = .98f),
+        color = SagePanel.copy(alpha = .99f),
         shadowElevation = 16.dp,
         modifier = Modifier.fillMaxSize(),
     ) {
@@ -2165,7 +2178,7 @@ private fun JourneyRoutePanel(
                     Text(if (zineMode) "真实照片作锚，让沿途发现长成一页纸上风景" else "点击沿线照片，回看当时的问题与回答", color = SageMuted, fontSize = 11.sp)
                 }
                 IconButton(onClick = onShare, modifier = Modifier.background(SageMist, CircleShape)) {
-                    Icon(Icons.Default.Share, "分享知识游记", tint = SageGreenDark)
+                    Icon(Icons.Default.Share, "分享知识游记", tint = SageSignalCyan)
                 }
             }
             Row(
@@ -2176,14 +2189,14 @@ private fun JourneyRoutePanel(
                     selected = zineMode,
                     onClick = { zineMode = true },
                     variant = 0,
-                    tint = Color(0xFFF1EDDA),
+                    tint = SagePanelRaised,
                     modifier = Modifier.weight(1f),
                 ) { Text("拾景纸刊", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
                 BubbleChoice(
                     selected = !zineMode,
                     onClick = { zineMode = false },
                     variant = 1,
-                    tint = Color(0xFFE4EFE8),
+                    tint = SagePanelRaised,
                     modifier = Modifier.weight(1f),
                 ) { Text("知识路线", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
             }
@@ -2223,7 +2236,7 @@ private fun JourneyRoutePanel(
                             icon = Icons.Default.Mic,
                             title = "$voiceCount 次语音发现",
                             detail = voiceTranscripts.lastOrNull().orEmpty().ifBlank { voiceTranscript.ifBlank { "沿途语音问答" } }.take(22),
-                            accent = Color(0xFF4E718B),
+                            accent = SageSignalCyan,
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -2232,7 +2245,7 @@ private fun JourneyRoutePanel(
                             icon = Icons.AutoMirrored.Filled.AltRoute,
                             title = if (routeReplanned) "$replanCount 次路线调整" else "$replanCount 次重规划建议",
                             detail = if (routeReplanned) "节点已落在当前高德路线" else "建议已记录 · 不叠加虚拟线路",
-                            accent = SageOchre,
+                            accent = SageSignalCoral,
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -2251,7 +2264,7 @@ private fun JourneyRoutePanel(
                     JourneyMomentDetail(moments[index.coerceIn(moments.indices)], index + 1, moments.size)
                 }
                 } else {
-                Surface(color = Color(0xFFF4F6F3), shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth().padding(top = 11.dp)) {
+                Surface(color = SagePanelSoft, shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth().padding(top = 11.dp)) {
                     Text("这次旅程还没有照片节点。下次可在探索途中拍照圈搜，照片和问题会自动落到路线上。", color = SageMuted, fontSize = 12.sp, lineHeight = 18.sp, modifier = Modifier.padding(14.dp))
                 }
                 }
@@ -2259,7 +2272,7 @@ private fun JourneyRoutePanel(
             if (showUncertainty && result.uncertainty != null) {
                 Text(
                     result.uncertainty,
-                    color = Color(0xFF805024),
+                    color = SageSignalCoral,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 10.dp).background(SageWarningSurface, RoundedCornerShape(12.dp)).padding(9.dp),
                 )
@@ -2271,7 +2284,7 @@ private fun JourneyRoutePanel(
                 OutlinedButton(onClick = onReset, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(15.dp)) { Text("重新编排") }
             }
             Button(onClick = onPrimary, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(53.dp), shape = RoundedCornerShape(17.dp)) {
-                Text(result.primaryAction, fontSize = 15.sp, color = Color.White)
+                Text(result.primaryAction, fontSize = 15.sp, color = SageOnSignal, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -2288,7 +2301,7 @@ private fun JourneyRouteMap(
     onSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.clip(sageBubbleShape(6)).background(Color(0xFFE4ECE6))) {
+    Box(modifier.clip(sageBubbleShape(6)).background(SagePanelSoft)) {
         AmapParkMap(
             contentDescription = "本次高德真实步行路线与沿途节点",
             modifier = Modifier.fillMaxSize(),
@@ -2301,9 +2314,9 @@ private fun JourneyRouteMap(
             onJourneyPhotoSelected = onSelected,
             gesturesEnabled = false,
         )
-        Surface(color = SageGreenDark.copy(alpha = .92f), shape = RoundedCornerShape(10.dp), modifier = Modifier.align(Alignment.TopStart).padding(10.dp)) {
+        Surface(color = SagePanel.copy(alpha = .94f), shape = RoundedCornerShape(10.dp), modifier = Modifier.align(Alignment.TopStart).padding(10.dp)) {
             Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(6.dp).background(Color(0xFF9DE0B6), CircleShape))
+                Box(Modifier.size(6.dp).background(SageSignalLime, CircleShape))
                 Text(
                     "高德真实路线 · ${moments.size} 照片 · $voiceCount 语音 · $replanCount 次调整",
                     color = Color.White,
@@ -2326,12 +2339,12 @@ private fun JourneyMaterialSummary(
     Surface(
         color = accent.copy(alpha = .11f),
         shape = sageBubbleShape(if (accent == SageOchre) 5 else 2),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = .82f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, SageDivider),
         shadowElevation = 2.dp,
         modifier = modifier,
     ) {
         Row(Modifier.padding(horizontal = 11.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(color = accent, contentColor = Color.White, shape = CircleShape) {
+            Surface(color = accent, contentColor = SageOnSignal, shape = CircleShape) {
                 Icon(icon, null, modifier = Modifier.padding(7.dp).size(16.dp))
             }
             Column(Modifier.padding(start = 9.dp)) {
@@ -2362,9 +2375,9 @@ private fun JourneyPhotoImage(rawUri: String, contentDescription: String, modifi
 @Composable
 private fun JourneyMomentDetail(moment: JourneyPhotoMoment, position: Int, total: Int) {
     Surface(
-        color = Color(0xFFFFFBF2),
+        color = SagePanelRaised,
         shape = sageBubbleShape(4),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE7DDC9)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, SageDivider),
         shadowElevation = 3.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -2372,14 +2385,14 @@ private fun JourneyMomentDetail(moment: JourneyPhotoMoment, position: Int, total
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(contentAlignment = Alignment.Center) {
                     Box(Modifier.size(54.dp).background(SageGreen.copy(alpha = .14f), sageBubbleShape(1)))
-                    JourneyPhotoImage(moment.photoUri, moment.label, Modifier.size(44.dp).border(2.dp, Color.White, CircleShape))
+                    JourneyPhotoImage(moment.photoUri, moment.label, Modifier.size(44.dp).border(2.dp, SageSignalLime, CircleShape))
                 }
                 Column(Modifier.padding(start = 10.dp).weight(1f)) {
                     Text(moment.label, color = SageInk, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Text("第 $position 个沿途发现 · 共 $total 个节点", color = SageMuted, fontSize = 10.sp)
                 }
-                Surface(color = SageGreenDark, shape = RoundedCornerShape(100.dp)) {
-                    Text("${moment.questions.size} 问", color = Color.White, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
+                Surface(color = SageSignalLime.copy(alpha = .14f), shape = RoundedCornerShape(100.dp)) {
+                    Text("${moment.questions.size} 问", color = SageSignalLime, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
                 }
             }
             if (moment.questions.isEmpty()) {
@@ -2387,21 +2400,21 @@ private fun JourneyMomentDetail(moment: JourneyPhotoMoment, position: Int, total
                     "这张照片已经落在路线节点上；当时没有继续提问。",
                     color = SageMuted,
                     fontSize = 11.sp,
-                    modifier = Modifier.padding(top = 11.dp).background(Color(0xFFF1ECDF), sageBubbleShape(3)).padding(11.dp),
+                    modifier = Modifier.padding(top = 11.dp).background(SagePanelSoft, sageBubbleShape(3)).padding(11.dp),
                 )
             } else {
                 moment.questions.forEachIndexed { index, item ->
                     Surface(
-                        color = if (index % 2 == 0) Color(0xFFEAF2E8) else Color(0xFFFFEDDE),
+                        color = if (index % 2 == 0) SagePanelSoft else SageWarningSurface,
                         shape = sageBubbleShape(index + 7),
                         modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                     ) {
                         Column(Modifier.padding(11.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(color = if (index % 2 == 0) SageGreenDark else SageOchre, shape = CircleShape) {
-                                    Text("Q${index + 1}", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp))
+                                Surface(color = if (index % 2 == 0) SageSignalLime else SageSignalCoral, shape = CircleShape) {
+                                    Text("Q${index + 1}", color = SageOnSignal, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp))
                                 }
-                                Text(item.question, color = SageGreenDark, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp).weight(1f))
+                                Text(item.question, color = if (index % 2 == 0) SageSignalLime else SageSignalCoral, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp).weight(1f))
                             }
                             Text(item.answer, color = SageInk, fontSize = 11.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 7.dp))
                         }
@@ -2431,7 +2444,7 @@ private fun AdjustExperiment(
     } else {
         rememberRealSpeechInputState(state.replanRequestText, onRequestChanged)
     }
-    Box(Modifier.fillMaxSize().background(Color(0xFFE5E8E2))) {
+    Box(Modifier.fillMaxSize().background(SageSurface)) {
         AmapParkMap(
             contentDescription = "动态路线地图",
             modifier = Modifier.fillMaxSize(),
@@ -2439,7 +2452,7 @@ private fun AdjustExperiment(
             selectedAlternative = state.selectedRoute == RouteChoice.RECOMMENDED,
             showRouteSummary = false,
         )
-        Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = .25f)))
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .42f)))
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {
             FunctionHeader(state, onBack, onResearcherPanel, onCancel)
             if (state.isRunning || state.resultVisible) {
@@ -2459,7 +2472,7 @@ private fun AdjustExperiment(
                             AiStage.UNCERTAIN -> "保留原路线作为可接管备选"
                             else -> "正在读取环境变化"
                         },
-                        color = Color(0xFF805024),
+                        color = SageSignalCoral,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
                     )
@@ -2514,7 +2527,7 @@ private fun ReplanInputCard(
     val suggested = "前方临时封路，而且快下雨了，帮我调整路线"
     FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        tint = Color(0xFFFFF2DF),
+        tint = SagePanelRaised,
         modifier = modifier.fillMaxWidth().imePadding(),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 18.dp)) {
@@ -2539,21 +2552,21 @@ private fun ReplanInputCard(
                 IconButton(
                     onClick = speech.onToggle,
                     modifier = Modifier.padding(start = 7.dp).size(48.dp).background(
-                        if (speech.isListening) SageGreen else SageMist,
+                        if (speech.isListening) SageSignalCyan else SageMist,
                         CircleShape,
                     ),
                 ) {
-                    Icon(Icons.Default.Mic, "语音描述变化", tint = if (speech.isListening) Color.White else SageGreenDark)
+                    Icon(Icons.Default.Mic, "语音描述变化", tint = if (speech.isListening) SageOnSignal else SageSignalCyan)
                 }
             }
-            Text(speech.status, color = if (speech.isListening) SageGreenDark else SageMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(speech.status, color = if (speech.isListening) SageSignalCyan else SageMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
             Button(
                 enabled = request.isNotBlank() && !speech.isListening,
                 onClick = onRun,
                 modifier = Modifier.fillMaxWidth().padding(top = 9.dp).height(52.dp),
                 shape = RoundedCornerShape(17.dp),
             ) {
-                Text("确认变化并调整路线", fontSize = 15.sp, color = Color.White)
+                Text("确认变化并调整路线", fontSize = 15.sp, color = SageOnSignal, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -2571,7 +2584,7 @@ private fun ReplanDecisionCard(stage: AiStage) {
         animationSpec = tween(1080),
         label = "replanDecisionProgress",
     )
-    Surface(color = Color.White.copy(alpha = .92f), shape = RoundedCornerShape(24.dp), shadowElevation = 10.dp, modifier = Modifier.fillMaxWidth()) {
+    Surface(color = SagePanelRaised.copy(alpha = .96f), shape = RoundedCornerShape(24.dp), shadowElevation = 10.dp, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(color = SageWarningSurface, shape = CircleShape) {
@@ -2582,8 +2595,8 @@ private fun ReplanDecisionCard(stage: AiStage) {
                     Text("旧路线保留为残影，新分支逐段绕开变化点", color = SageMuted, fontSize = 10.sp)
                 }
             }
-            CandidateRouteRow("原路线", "封闭点前停止 · 可回退", (1f - progress * .58f).coerceAtLeast(.28f), SageOchre, Modifier.padding(top = 13.dp))
-            CandidateRouteRow("新路线", "+4 分钟 · 经过 2 处连廊", progress, SageGreen, Modifier.padding(top = 11.dp))
+            CandidateRouteRow("原路线", "封闭点前停止 · 可回退", (1f - progress * .58f).coerceAtLeast(.28f), SageSignalCoral, Modifier.padding(top = 13.dp))
+            CandidateRouteRow("新路线", "+4 分钟 · 经过 2 处连廊", progress, SageSignalLime, Modifier.padding(top = 11.dp))
         }
     }
 }
@@ -2602,14 +2615,14 @@ private fun ResultPanel(
 ) {
     FrostedGlassSurface(
         shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        tint = Color(0xFFEAF3EC),
+        tint = SagePanelRaised,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 22.dp, vertical = 20.dp)) {
             ResultSourceNote(result)
             VoiceAnswerScene(result)
             Surface(
-                color = Color.White.copy(alpha = .72f),
+                color = SagePanelSoft,
                 shape = sageBubbleShape(3),
                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
             ) {
@@ -2622,7 +2635,7 @@ private fun ResultPanel(
                 )
             }
             if (photoUris.isNotEmpty()) {
-                Surface(color = Color(0xFFF5F7F4), shape = RoundedCornerShape(15.dp), modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                Surface(color = SagePanelSoft, shape = RoundedCornerShape(15.dp), modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
                     Column(Modifier.padding(10.dp)) {
                         Text("旅程中的照片 · ${photoUris.size} 张", color = SageInk, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                         Row(Modifier.padding(top = 8.dp)) {
@@ -2634,13 +2647,13 @@ private fun ResultPanel(
             if (showUncertainty && result.uncertainty != null) {
                 Text(
                     result.uncertainty,
-                    color = Color(0xFF805024),
+                    color = SageSignalCoral,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 10.dp).background(SageWarningSurface, RoundedCornerShape(12.dp)).padding(10.dp),
                 )
             }
             Button(onClick = onPrimary, modifier = Modifier.fillMaxWidth().padding(top = 12.dp).height(54.dp), shape = RoundedCornerShape(17.dp)) {
-                Text(result.primaryAction, fontSize = 16.sp, color = Color.White)
+                Text(result.primaryAction, fontSize = 16.sp, color = SageOnSignal, fontWeight = FontWeight.Bold)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 if (onSpeak != null) TextButton(onClick = onSpeak) {
@@ -2668,7 +2681,7 @@ private fun ResultPanel(
 private fun VoiceAnswerScene(result: AiTaskResult) {
     val tokens = remember(result) { resultVisualTokens(result) }
     Surface(
-        color = Color(0xFFDDEBDD).copy(alpha = .84f),
+        color = SagePanelSoft,
         shape = sageBubbleShape(1),
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -2687,23 +2700,23 @@ private fun VoiceAnswerScene(result: AiTaskResult) {
                 }
                 drawPath(
                     route,
-                    SageGreenDark.copy(alpha = .22f),
+                    SageSignalCyan.copy(alpha = .46f),
                     style = Stroke(
                         width = 2.5.dp.toPx(),
                         cap = StrokeCap.Round,
                         pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)),
                     ),
                 )
-                drawCircle(Color.White.copy(alpha = .88f), 10.dp.toPx(), Offset(size.width * .08f, size.height * .72f))
-                drawCircle(SageGreen, 5.dp.toPx(), Offset(size.width * .08f, size.height * .72f))
-                drawCircle(Color(0xFFF7C35B).copy(alpha = .92f), 13.dp.toPx(), Offset(size.width * .86f, size.height * .30f))
-                drawCircle(Color.White, 4.dp.toPx(), Offset(size.width * .86f, size.height * .30f))
+                drawCircle(SageSignalCyan.copy(alpha = .26f), 10.dp.toPx(), Offset(size.width * .08f, size.height * .72f))
+                drawCircle(SageSignalCyan, 5.dp.toPx(), Offset(size.width * .08f, size.height * .72f))
+                drawCircle(SageSignalLime.copy(alpha = .28f), 13.dp.toPx(), Offset(size.width * .86f, size.height * .30f))
+                drawCircle(SageSignalLime, 4.dp.toPx(), Offset(size.width * .86f, size.height * .30f))
             }
             Row(
                 Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Surface(color = SageGreenDark, contentColor = Color.White, shape = CircleShape) {
+                Surface(color = SageSignalCyan, contentColor = SageOnSignal, shape = CircleShape) {
                     Icon(Icons.Default.LocationOn, null, Modifier.padding(7.dp).size(17.dp))
                 }
                 Text(
@@ -2715,7 +2728,7 @@ private fun VoiceAnswerScene(result: AiTaskResult) {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(start = 9.dp).weight(1f),
                 )
-                Text("沿途发现", color = SageGreenDark, fontSize = 9.sp, letterSpacing = .6.sp)
+                Text("沿途发现", color = SageSignalCyan, fontSize = 9.sp, letterSpacing = .6.sp)
             }
             Row(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
@@ -2723,7 +2736,7 @@ private fun VoiceAnswerScene(result: AiTaskResult) {
             ) {
                 tokens.take(3).forEachIndexed { index, token ->
                     Surface(
-                        color = listOf(Color(0xFFFFF4D6), Color(0xFFE7F1F7), Color(0xFFFFE8DC))[index % 3],
+                        color = listOf(SagePanelRaised, Color(0xFF10201F), Color(0xFF241614))[index % 3],
                         shape = sageBubbleShape(index + 4),
                         modifier = Modifier.weight(1f),
                     ) {
@@ -2771,7 +2784,7 @@ private fun ResultSourceNote(result: AiTaskResult) {
         ) {
             Text(
                 result.sourceLabel,
-                color = if (result.isLiveData) SageGreenDark else Color(0xFF805024),
+                color = if (result.isLiveData) SageSignalCyan else SageSignalCoral,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f),
@@ -2807,7 +2820,7 @@ private fun DemoCompleteScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Surface(
-            color = Color.White,
+            color = SagePanelRaised,
             shape = RoundedCornerShape(22.dp),
             modifier = Modifier
                 .fillMaxWidth()
@@ -2843,7 +2856,7 @@ private fun DemoCompleteScreen(
             modifier = Modifier.padding(top = 8.dp),
         )
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = SagePanelRaised),
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
         ) {
@@ -2854,7 +2867,7 @@ private fun DemoCompleteScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
                     ) {
-                        Icon(Icons.Default.Check, null, tint = SageGreen, modifier = Modifier.size(19.dp))
+                        Icon(Icons.Default.Check, null, tint = SageSignalLime, modifier = Modifier.size(19.dp))
                         Text(label, color = SageInk, modifier = Modifier.padding(start = 10.dp).weight(1f))
                         Text("已完成", color = SageMuted, fontSize = 12.sp)
                     }
@@ -2867,7 +2880,7 @@ private fun DemoCompleteScreen(
             shape = RoundedCornerShape(17.dp),
             modifier = Modifier.fillMaxWidth().padding(top = 18.dp).height(54.dp),
         ) {
-            Text("重新体验完整流程", fontSize = 16.sp, color = Color.White)
+            Text("重新体验完整流程", fontSize = 16.sp, color = SageOnSignal, fontWeight = FontWeight.Bold)
         }
         OutlinedButton(
             onClick = onFinish,
@@ -2887,7 +2900,7 @@ private fun DemoCompleteScreen(
 private fun EvidenceDialog(evidence: List<String>, onDismiss: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color.White,
+        containerColor = SagePanel,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
@@ -2902,7 +2915,7 @@ private fun EvidenceDialog(evidence: List<String>, onDismiss: () -> Unit) {
                     Icon(
                         Icons.Default.Info,
                         contentDescription = null,
-                        tint = SageGreen,
+                        tint = SageSignalLime,
                         modifier = Modifier.padding(10.dp).size(22.dp),
                     )
                 }
@@ -2920,10 +2933,10 @@ private fun EvidenceDialog(evidence: List<String>, onDismiss: () -> Unit) {
                 ) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
                         Box(
-                            Modifier.size(28.dp).background(SageGreen, CircleShape),
+                            Modifier.size(28.dp).background(SageSignalLime, CircleShape),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text("${index + 1}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("${index + 1}", color = SageOnSignal, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                         Spacer(Modifier.width(11.dp))
                         Column(Modifier.weight(1f)) {
@@ -2933,7 +2946,7 @@ private fun EvidenceDialog(evidence: List<String>, onDismiss: () -> Unit) {
                                     1 -> "交叉验证"
                                     else -> "补充依据"
                                 },
-                                color = SageGreenDark,
+                                color = SageSignalLime,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -2952,7 +2965,7 @@ private fun EvidenceDialog(evidence: List<String>, onDismiss: () -> Unit) {
                 )
             }
             Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth().height(50.dp)) {
-                Text("完成查看", color = Color.White)
+                Text("完成查看", color = SageOnSignal, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(4.dp))
         }
@@ -2978,10 +2991,10 @@ private fun ResearcherPanel(
     onRecordMisoperation: () -> Unit,
     onFinishSession: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color.White) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = SagePanel) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Settings, null, tint = SageGreen)
+                Icon(Icons.Default.Settings, null, tint = SageSignalLime)
                 Spacer(Modifier.width(9.dp))
                 Column(Modifier.weight(1f)) {
                     Text("研究员控制台", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
@@ -3012,7 +3025,7 @@ private fun ResearcherPanel(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 16.dp)) {
-                Button(onClick = { onDismiss(); onRun() }, modifier = Modifier.weight(1f)) { Text("运行任务", color = Color.White) }
+                Button(onClick = { onDismiss(); onRun() }, modifier = Modifier.weight(1f)) { Text("运行任务", color = SageOnSignal, fontWeight = FontWeight.Bold) }
                 OutlinedButton(onClick = onReset, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Refresh, null); Spacer(Modifier.width(6.dp)); Text("重置") }
             }
             Text("动效状态预览", fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 14.dp))
