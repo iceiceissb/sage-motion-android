@@ -7,16 +7,12 @@ import android.os.Build
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import cn.tsinghua.sagemotion.data.AiDemoApi
 import cn.tsinghua.sagemotion.data.AiTaskEvent
 import cn.tsinghua.sagemotion.data.AiTaskRequest
 import cn.tsinghua.sagemotion.data.ExperimentLogger
 import cn.tsinghua.sagemotion.data.ExperimentSessionStore
 import cn.tsinghua.sagemotion.data.JourneyShareRenderer
-import cn.tsinghua.sagemotion.data.MockAiDemoApi
-import cn.tsinghua.sagemotion.data.agent.OpenMeteoParkContextProvider
-import cn.tsinghua.sagemotion.data.agent.OpenStreetMapPlaceProvider
-import cn.tsinghua.sagemotion.data.agent.ParkAgentApi
+import cn.tsinghua.sagemotion.data.agent.ParkAgentRuntime
 import cn.tsinghua.sagemotion.data.vision.OnDeviceVisionAnalyzer
 import cn.tsinghua.sagemotion.model.AiStage
 import cn.tsinghua.sagemotion.model.ConditionOrder
@@ -39,12 +35,7 @@ import java.io.File
 class ExperimentViewModel(application: Application) : AndroidViewModel(application) {
     private val logger = ExperimentLogger(application)
     private val sessionStore = ExperimentSessionStore(application)
-    private val offlineApi: AiDemoApi = MockAiDemoApi()
-    private val onlineAgentApi: AiDemoApi = ParkAgentApi(
-        scriptedApi = offlineApi,
-        contextProvider = OpenMeteoParkContextProvider(application),
-        placeProvider = OpenStreetMapPlaceProvider(),
-    )
+    private val agentRuntime = ParkAgentRuntime.create(application)
     private val visionAnalyzer = OnDeviceVisionAnalyzer(application)
     private val journeyShareRenderer = JourneyShareRenderer(application)
     private var pendingCaptureUri: Uri? = null
@@ -150,10 +141,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         logEvent("task_input_submitted", action = "submit", details = "prompt=${request.prompt.replace(';', '；').replace('\n', ' ').take(180)}")
         runJob = viewModelScope.launch {
             try {
-                val api = when (uiState.value.demoMode) {
-                    DemoMode.EXPERIMENT_OFFLINE -> offlineApi
-                    DemoMode.ONLINE_AGENT -> onlineAgentApi
-                }
+                val api = agentRuntime.apiFor(uiState.value.demoMode)
                 api.runTask(request).collect { event ->
                     when (event) {
                         is AiTaskEvent.StageChanged -> enterStage(event.stage)
