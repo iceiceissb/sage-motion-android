@@ -42,18 +42,21 @@
 - v1.15 精简路线结果与处理动效：路线结果页移除重复的偏好栏和高德路线摘要卡，只保留地图、路线与最终选择；语音任务处理中银小叶持续播放序列帧并轻微呼吸浮动，处理结束立即停止。
 - v1.16 重规划与识别界面减法：更改路线结果页移除地图中央重复的高德路线摘要卡；多点识别结果由深色文字块改为分散在识别位置附近的半透明圆泡泡，只保留类别和置信度，减少对照片主体的遮挡。
 - v1.17 Agent runtime 收口：明确采用“一个主编排 Agent + skills + typed tools”的产品架构；由 `ParkAgentRuntime` 统一选择正式实验的确定性流程与生态演示的联网工具编排，高德地图与路线能力保持原实现不变。
+- v1.18 安全远程 Agent：新增 FastAPI 后端，通过 OpenAI Responses API 运行一个主模型；按 A/B1/B2/C/D 场景只暴露当前任务所需的 strict tools，并以 SSE 映射现有阶段/完成事件。Android 新增 `RemoteAgentApi`，未配置、超时或服务异常时明确回退本地编排；模型密钥只保存在服务端，绝不进入 APK。
 - 当前工作区视觉重塑：主流程采用“数字公园信号层”语言，在真实高德地图上叠加深墨 HUD、酸性黄绿推荐路线、青色声场信号、珊瑚色备选/风险语义与少量等高线符号；高德 `MapView`、`RouteSearchV2`、定位和原生 `Polyline` 流程保持不变。
 
-## API 预留
+## AI Native Agent 与后端
 
 应用通过 `data/AiDemoApi.kt` 中的 `AiDemoApi` 获取阶段事件和任务结果，由
 `data/agent/ParkAgentRuntime.kt` 统一选择实现。实验模式使用
-`MockAiDemoApi`，因此无网络也能完整、可复现地演示；联网 Agent 模式会并行调用免密钥的 Open-Meteo
-天气与空气质量工具，再把用户路线约束、实时环境和内置园路候选送入确定性评分器。地图几何目前仍是本地园路图，
-不会把演示封路冒充成实时事实。当前联网 Agent 是确定性工具编排器，并未在 APK 内接入大模型或多个自治子 Agent。
-接入正式模型服务时可新增一个服务端实现（例如 Retrofit + SSE），
-把服务端进度映射为 `AiTaskEvent.StageChanged`、最终 JSON 映射为 `AiTaskEvent.Completed`，再在
-`ParkAgentRuntime` 中替换实现即可；Compose 页面和流程状态机无需改动。密钥不要写入仓库或 APK。
+`MockAiDemoApi`，因此无网络也能完整、可复现地演示。生态演示模式在配置后端地址时优先使用
+`RemoteAgentApi`：后端以一个主模型维护任务推理循环，按场景选择最小 strict tool 集，并把 SSE 进度映射为
+`AiTaskEvent.StageChanged`、结构化 JSON 映射为 `AiTaskEvent.Completed`。未配置后端或远程失败时，
+`RemoteFirstAiDemoApi` 会明确回退原有 `ParkAgentApi` 确定性工具编排器。
+
+模型 API Key 只由 `backend/` 读取服务端环境变量，Android 仅持有后端 URL 和受控环境使用的客户端令牌。
+地图、定位、步行路线几何与原生 `Polyline` 始终由高德 SDK 提供；主模型只解释约束与工具事实，不生成或替换高德路径。
+后端的启动、部署、安全边界与 Android 接线见 [backend/README.md](backend/README.md)。
 
 完整的单 Agent / skills / tools / 可选子 Agent 决策与迁移路线见 [AI_NATIVE_AGENT_ARCHITECTURE.md](AI_NATIVE_AGENT_ARCHITECTURE.md)。
 
@@ -102,7 +105,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```text
 app/src/main/java/cn/tsinghua/sagemotion/
 ├─ ExperimentViewModel.kt       # 实验状态机与控制逻辑
-├─ data/agent/ParkAgentRuntime.kt # 单主 Agent 运行时与模式选择
+├─ data/agent/ParkAgentRuntime.kt # 正式实验/远程主 Agent/本地降级选择
+├─ data/agent/RemoteAgentApi.kt # 后端 SSE 适配器，不含模型密钥
 ├─ data/ExperimentLogger.kt     # CSV 行为日志
 ├─ model/ExperimentModels.kt    # 条件、任务、状态与计时
 └─ ui/
@@ -116,7 +120,8 @@ app/src/main/java/cn/tsinghua/sagemotion/
 
 ## 验证状态
 
-- JVM 单元测试：22 项通过。
+- JVM 单元测试：23 项通过。
+- 后端测试：13 项通过（含 Responses 请求契约、鉴权、SSE、工具白名单与生产配置校验）。
 - Debug APK 构建：通过。
 - Android Lint：通过，无错误。
 - 390 × 844dp Compose 截图回归：路线约束、双路线计算、路线结果、草坪外环线与改道后的探索工作台、视觉提取/圈搜回答与圈搜语音、语音问答、路线式知识游记、动态调整、问卷与历史页共 21 个基线。

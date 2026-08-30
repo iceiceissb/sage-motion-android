@@ -13,14 +13,19 @@ SAGE 现阶段采用 **一个主 Agent + skills + typed tools** 最合适，不�
 
 ## 当前实现的真实状态
 
-当前 APK 还没有接入大模型。它是一个可复现的确定性 Agent runtime：
+当前工程已经具备安全远程主模型链路；只有配置部署后的后端地址时才启用。正式实验仍使用可复现的确定性 runtime：
 
 ```mermaid
 flowchart LR
     UI["Compose UI"] --> VM["ExperimentViewModel\n会话与实验状态机"]
     VM --> RT["ParkAgentRuntime\n单一任务入口"]
     RT -->|"正式实验"| MOCK["MockAiDemoApi\n固定阶段与固定结果"]
-    RT -->|"生态演示"| ORCH["ParkAgentApi\n确定性工具编排"]
+    RT -->|"生态演示且已配置"| REMOTE["RemoteAgentApi\nSSE + 远程优先"]
+    REMOTE --> BACKEND["SAGE Agent Backend\nResponses API 主模型"]
+    BACKEND --> WEATHER["Open-Meteo\n天气与空气质量"]
+    BACKEND --> PLACE["OpenStreetMap\n附近地点"]
+    BACKEND --> PROFILE["路线画像评分\n非路径几何"]
+    REMOTE -->|"未配置或失败"| ORCH["ParkAgentApi\n确定性本地降级"]
     ORCH --> WEATHER["Open-Meteo\n天气与空气质量"]
     ORCH --> PLACE["OpenStreetMap\n附近地点"]
     UI --> AMAP["高德地图 SDK\n地图、定位、步行路线"]
@@ -29,7 +34,7 @@ flowchart LR
     VM --> STORE["本地日志、会话与游记"]
 ```
 
-`AiDemoApi` 是稳定的智能层边界；`ParkAgentRuntime` 负责选择正式实验或生态演示实现。这样 ViewModel 不再负责组装具体工具，后续替换为服务端模型时 UI 和任务状态机不需要重写。
+`AiDemoApi` 是稳定的智能层边界；`ParkAgentRuntime` 负责选择正式实验、远程主 Agent 或本地降级实现。这样 ViewModel 不负责组装工具，后端升级模型时 UI 和任务状态机无需重写。服务端实现、环境变量与部署说明见 [backend/README.md](backend/README.md)。
 
 ## 推荐目标架构
 
@@ -109,9 +114,9 @@ Skill 应主要存在于服务端的指令、策略和工作流中；Tool 应是
 ## 迁移路线
 
 1. **已完成：运行时收口。** 由 `ParkAgentRuntime` 统一选择离线与联网编排实现。
-2. **定义工具协议。** 为 Route、Environment、Place、Vision、Speech、Memory、Journey 统一输入输出与 provenance。
-3. **新增服务端 `RemoteAgentApi`。** 使用流式接口实现现有 `AiDemoApi` 协议，客户端不保存模型密钥。
-4. **接入一个主模型。** 先覆盖语音问答与路线约束解释，保留高德和确定性评分作为事实/降级路径。
+2. **已完成：首批工具协议。** Environment、Place 与路线画像工具已有 strict schema、超时、来源与失败语义；Vision、Speech、Memory、Journey 仍保留端侧/后续扩展边界。
+3. **已完成：服务端与 `RemoteAgentApi`。** 使用 SSE 实现现有 `AiDemoApi` 协议，客户端不保存模型密钥。
+4. **已完成：接入一个主模型。** Responses API 已覆盖当前 A/B1/B2/C/D 任务解释，保留高德和确定性评分作为事实/降级路径；部署后端并设置密钥后启用。
 5. **建立评测。** 检查工具选择正确率、无数据时拒绝虚构、路线事实一致性、端到端延迟和中断恢复。
 6. **按收益引入子 Agent。** 只在游记生成或跨来源研究证明并行收益后启用。
 

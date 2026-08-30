@@ -21,6 +21,8 @@ fun quotedBuildConfig(value: String): String =
 
 val amapApiKey = sageConfigValue("AMAP_API_KEY")
 val amapStyleId = sageConfigValue("AMAP_STYLE_ID")
+val sageAgentBackendUrl = sageConfigValue("SAGE_AGENT_BACKEND_URL")
+val sageAgentClientToken = sageConfigValue("SAGE_AGENT_CLIENT_TOKEN")
 
 android {
     namespace = "cn.tsinghua.sagemotion"
@@ -30,8 +32,8 @@ android {
         applicationId = "cn.tsinghua.sagemotion"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "1.17.0-single-agent-tools"
+        versionCode = 28
+        versionName = "1.18.0-remote-agent-backend"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
@@ -40,6 +42,8 @@ android {
         manifestPlaceholders["AMAP_API_KEY"] = amapApiKey
         buildConfigField("boolean", "AMAP_API_KEY_CONFIGURED", amapApiKey.isNotBlank().toString())
         buildConfigField("String", "AMAP_STYLE_ID", quotedBuildConfig(amapStyleId))
+        buildConfigField("String", "SAGE_AGENT_BACKEND_URL", quotedBuildConfig(sageAgentBackendUrl))
+        buildConfigField("String", "SAGE_AGENT_CLIENT_TOKEN", quotedBuildConfig(sageAgentClientToken))
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

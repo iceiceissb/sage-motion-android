@@ -1,6 +1,7 @@
 package cn.tsinghua.sagemotion.data.agent
 
 import android.content.Context
+import cn.tsinghua.sagemotion.BuildConfig
 import cn.tsinghua.sagemotion.data.AiDemoApi
 import cn.tsinghua.sagemotion.data.MockAiDemoApi
 import cn.tsinghua.sagemotion.model.DemoMode
@@ -25,11 +26,25 @@ class ParkAgentRuntime(
     companion object {
         fun create(context: Context): ParkAgentRuntime {
             val deterministicApi = MockAiDemoApi()
-            val connectedApi = ParkAgentApi(
+            val localConnectedApi = ParkAgentApi(
                 scriptedApi = deterministicApi,
                 contextProvider = OpenMeteoParkContextProvider(context.applicationContext),
                 placeProvider = OpenStreetMapPlaceProvider(),
             )
+            val remoteUrl = BuildConfig.SAGE_AGENT_BACKEND_URL.trim().takeIf { url ->
+                url.startsWith("https://") || (BuildConfig.DEBUG && url.startsWith("http://"))
+            }
+            val connectedApi = if (remoteUrl != null) {
+                RemoteFirstAiDemoApi(
+                    remoteApi = RemoteAgentApi(
+                        baseUrl = remoteUrl,
+                        bearerToken = BuildConfig.SAGE_AGENT_CLIENT_TOKEN,
+                    ),
+                    localFallbackApi = localConnectedApi,
+                )
+            } else {
+                localConnectedApi
+            }
             return ParkAgentRuntime(
                 deterministicApi = deterministicApi,
                 connectedApi = connectedApi,

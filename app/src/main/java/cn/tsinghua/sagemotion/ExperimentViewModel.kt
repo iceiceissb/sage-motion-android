@@ -9,6 +9,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cn.tsinghua.sagemotion.data.AiTaskEvent
 import cn.tsinghua.sagemotion.data.AiTaskRequest
+import cn.tsinghua.sagemotion.data.AgentJourneyContext
 import cn.tsinghua.sagemotion.data.ExperimentLogger
 import cn.tsinghua.sagemotion.data.ExperimentSessionStore
 import cn.tsinghua.sagemotion.data.JourneyShareRenderer
@@ -137,6 +138,19 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
                 else -> uiState.value.scenario.participantPrompt
             },
             visionFindings = if (uiState.value.scenario == ExperimentScenario.VISUAL) uiState.value.visionFindings else emptyList(),
+            journeyContext = AgentJourneyContext(
+                activeRouteName = uiState.value.activeRouteName,
+                routeReplanned = uiState.value.routeReplanned,
+                previousVoiceTurns = uiState.value.voiceTranscripts.takeLast(12),
+                visionLabels = (
+                    uiState.value.visionFindings.map { it.label } +
+                        uiState.value.journeyPhotoMoments.map { it.label }
+                    ).distinct().takeLast(24),
+                photoQuestionCount = uiState.value.journeyPhotoMoments.sumOf { it.questions.size },
+                visualInteractionCount = uiState.value.visualInteractionCount,
+                voiceInteractionCount = uiState.value.voiceInteractionCount,
+                replanCount = uiState.value.replanCount,
+            ),
         )
         logEvent("task_input_submitted", action = "submit", details = "prompt=${request.prompt.replace(';', '；').replace('\n', ' ').take(180)}")
         runJob = viewModelScope.launch {

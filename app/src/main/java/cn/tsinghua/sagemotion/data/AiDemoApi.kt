@@ -15,6 +15,19 @@ data class AiTaskRequest(
     val scenario: ExperimentScenario,
     val prompt: String,
     val visionFindings: List<VisionFinding> = emptyList(),
+    val journeyContext: AgentJourneyContext = AgentJourneyContext(),
+)
+
+/** Minimal, non-identifying journey memory sent to the remote primary agent. */
+data class AgentJourneyContext(
+    val activeRouteName: String = "湖边林荫线",
+    val routeReplanned: Boolean = false,
+    val previousVoiceTurns: List<String> = emptyList(),
+    val visionLabels: List<String> = emptyList(),
+    val photoQuestionCount: Int = 0,
+    val visualInteractionCount: Int = 0,
+    val voiceInteractionCount: Int = 0,
+    val replanCount: Int = 0,
 )
 
 sealed interface AiTaskEvent {
