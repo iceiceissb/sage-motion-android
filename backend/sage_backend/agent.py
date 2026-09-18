@@ -10,7 +10,8 @@ from pydantic import ValidationError
 from .config import Settings
 from .models import AgentEvent, AgentTaskRequest, AgentTaskResult, ModelTaskResult, Scenario, ToolExecution
 from .openai_gateway import ResponsesGateway
-from .prompts import SYSTEM_INSTRUCTIONS, build_user_input
+from .prompts import build_run_instructions, build_user_input
+from .skills import skill_for
 from .tooling import ToolRegistry
 
 
@@ -47,11 +48,23 @@ class SagePrimaryAgent:
 
     async def run(self, request: AgentTaskRequest) -> AsyncIterator[AgentEvent]:
         yield _event("stage_changed", request, stage="activating")
-        schemas = self.tools.schemas_for(request.scenario)
+        skill = skill_for(request.scenario)
+        schemas = self.tools.schemas_for(request.scenario, skill.allowed_tools)
+        user_content: list[dict[str, Any]] = [
+            {"type": "input_text", "text": build_user_input(request)}
+        ]
+        if request.vision_image_data_url:
+            user_content.append(
+                {
+                    "type": "input_image",
+                    "image_url": request.vision_image_data_url,
+                    "detail": "high",
+                }
+            )
         input_items: list[dict[str, Any]] = [
             {
                 "role": "user",
-                "content": [{"type": "input_text", "text": build_user_input(request)}],
+                "content": user_content,
             }
         ]
         executions: list[ToolExecution] = []
@@ -66,7 +79,7 @@ class SagePrimaryAgent:
                 input_items=input_items,
                 tools=schemas,
                 output_schema=ModelTaskResult.model_json_schema(),
-                instructions=SYSTEM_INSTRUCTIONS,
+                instructions=build_run_instructions(skill),
                 round_index=round_index,
             )
             last_openai_request_id = response.get("_sage_openai_request_id")
@@ -124,6 +137,7 @@ class SagePrimaryAgent:
                         name=str(call.get("name", "")),
                         raw_arguments=str(call.get("arguments", "{}")),
                         request=request,
+                        allowed_tool_names=skill.allowed_tools,
                     )
                     for call in calls
                 )
@@ -190,6 +204,8 @@ def _finalize_result(
         provenance_evidence.append(f"模型请求追踪：{openai_request_id}")
 
     source_label = f"服务端主 Agent · OpenAI {model}"
+    if request.vision_image_data_url:
+        source_label += " · 多模态看图"
     successful_tools = [execution.tool_name for execution in executions if execution.ok]
     if successful_tools:
         source_label += f" · {len(successful_tools)} 个工具"

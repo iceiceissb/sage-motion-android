@@ -22,7 +22,7 @@ class Settings(BaseSettings):
         default=SecretStr(""),
         validation_alias=AliasChoices("OPENAI_API_KEY", "SAGE_OPENAI_API_KEY"),
     )
-    openai_model: str = Field(default="gpt-5.6-luna", validation_alias="SAGE_OPENAI_MODEL")
+    openai_model: str = Field(default="gpt-5.6-terra", validation_alias="SAGE_OPENAI_MODEL")
     openai_base_url: str = Field(
         default="https://api.openai.com/v1",
         validation_alias="SAGE_OPENAI_BASE_URL",

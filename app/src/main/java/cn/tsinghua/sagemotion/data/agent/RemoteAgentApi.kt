@@ -1,5 +1,6 @@
 package cn.tsinghua.sagemotion.data.agent
 
+import android.content.Context
 import cn.tsinghua.sagemotion.BuildConfig
 import cn.tsinghua.sagemotion.data.AiDemoApi
 import cn.tsinghua.sagemotion.data.AiTaskEvent
@@ -25,10 +26,12 @@ import java.util.UUID
  * a scoped client token issued by that backend or its API gateway.
  */
 class RemoteAgentApi(
+    context: Context,
     baseUrl: String,
     private val bearerToken: String = "",
 ) : AiDemoApi {
     private val endpoint = "${baseUrl.trimEnd('/')}/v1/agent/tasks:stream"
+    private val imageEncoder = VisionImagePayloadEncoder(context)
 
     override fun runTask(request: AiTaskRequest): Flow<AiTaskEvent> = flow {
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
@@ -45,7 +48,11 @@ class RemoteAgentApi(
             }
         }
         try {
-            val body = request.toRemoteJson(UUID.randomUUID().toString().replace("-", ""))
+            val visionImageDataUrl = request.visionImageUri?.let(imageEncoder::encodeDataUrl)
+            val body = request.toRemoteJson(
+                requestId = UUID.randomUUID().toString().replace("-", ""),
+                visionImageDataUrl = visionImageDataUrl,
+            )
             connection.outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
                 writer.write(body.toString())
             }
@@ -125,7 +132,7 @@ class RemoteFirstAiDemoApi(
     }
 }
 
-private fun AiTaskRequest.toRemoteJson(requestId: String): JSONObject = JSONObject()
+private fun AiTaskRequest.toRemoteJson(requestId: String, visionImageDataUrl: String?): JSONObject = JSONObject()
     .put("request_id", requestId)
     .put("scenario", scenario.id)
     .put("prompt", prompt.take(2_000))
@@ -151,8 +158,23 @@ private fun AiTaskRequest.toRemoteJson(requestId: String): JSONObject = JSONObje
     )
     .put(
         "client_capabilities",
-        JSONArray(listOf("amap_route", "on_device_vision", "offline_speech", "local_journey_memory")),
+        JSONArray(
+            buildList {
+                addAll(
+                    listOf(
+                        "amap_route",
+                        "on_device_vision",
+                        if (BuildConfig.BUNDLED_OFFLINE_SPEECH) "offline_speech" else "system_speech",
+                        "local_journey_memory",
+                    ),
+                )
+                if (visionImageDataUrl != null) add("multimodal_image_upload")
+            },
+        ),
     )
+    .apply {
+        if (visionImageDataUrl != null) put("vision_image_data_url", visionImageDataUrl)
+    }
 
 internal fun decodeRemoteEvent(eventName: String, rawData: String): AiTaskEvent? {
     val payload = JSONObject(rawData)

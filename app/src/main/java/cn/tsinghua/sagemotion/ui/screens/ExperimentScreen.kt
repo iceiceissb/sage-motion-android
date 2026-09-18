@@ -82,6 +82,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -208,6 +209,7 @@ fun ExperimentScreen(
     onClearVisualQuestion: () -> Unit = {},
     onCreatePhotoUri: () -> Uri,
     onPhotoCaptured: (Boolean) -> Unit,
+    onCloudVisionUploadApproved: (Boolean) -> Unit = {},
     onShareJourney: () -> Unit,
     onBeginJourneySummary: () -> Unit,
     onRecordMisoperation: () -> Unit = {},
@@ -272,6 +274,7 @@ fun ExperimentScreen(
             onResearcherPanel = { onResearcherPanel(true) },
             onCreatePhotoUri = onCreatePhotoUri,
             onPhotoCaptured = onPhotoCaptured,
+            onCloudVisionUploadApproved = onCloudVisionUploadApproved,
             onBack = backToHub,
             onQuestionAsked = onVisualQuestionAsked,
             onClearQuestion = onClearVisualQuestion,
@@ -958,9 +961,12 @@ private fun StartCard(title: String, actionLabel: String, onRun: () -> Unit, mod
 @Composable
 private fun VisualStartCard(
     hasPhoto: Boolean,
+    onlineAgent: Boolean,
+    cloudVisionUploadApproved: Boolean,
     analysisStatus: String?,
     findings: String,
     onCapture: () -> Unit,
+    onCloudVisionUploadApproved: (Boolean) -> Unit,
     onRun: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -980,12 +986,34 @@ private fun VisualStartCard(
             if (findings.isNotBlank()) {
                 Text(findings, color = SageSignalLime, fontSize = 11.sp, modifier = Modifier.padding(top = 7.dp).background(SageMist, RoundedCornerShape(10.dp)).padding(8.dp))
             }
+            if (hasPhoto && onlineAgent) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 9.dp)
+                        .clickable { onCloudVisionUploadApproved(!cloudVisionUploadApproved) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = cloudVisionUploadApproved,
+                        onCheckedChange = onCloudVisionUploadApproved,
+                    )
+                    Column(Modifier.padding(start = 4.dp)) {
+                        Text("允许项目后端将压缩照片发送给 OpenAI", color = SageInk, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Text("用于生成本次回答；本应用不写入旅程日志", color = SageMuted, fontSize = 10.sp)
+                    }
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 OutlinedButton(onClick = onCapture, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(17.dp)) {
                     Icon(Icons.Default.CameraAlt, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text(if (hasPhoto) "重拍" else "实际拍照")
                 }
                 Button(onClick = onRun, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(17.dp)) {
-                    Text("开始识别", color = SageOnSignal, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (hasPhoto && onlineAgent && cloudVisionUploadApproved) "让 GPT 看图" else "开始识别",
+                        color = SageOnSignal,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
         }
@@ -1350,6 +1378,7 @@ private fun VisualExperiment(
     onResearcherPanel: () -> Unit,
     onCreatePhotoUri: () -> Uri,
     onPhotoCaptured: (Boolean) -> Unit,
+    onCloudVisionUploadApproved: (Boolean) -> Unit,
     onBack: () -> Unit,
     onQuestionAsked: (String) -> Unit,
     onClearQuestion: () -> Unit,
@@ -1436,9 +1465,12 @@ private fun VisualExperiment(
         if (!state.isRunning && !state.resultVisible) {
             VisualStartCard(
                 hasPhoto = state.capturedPhotoUri != null,
+                onlineAgent = state.demoMode == cn.tsinghua.sagemotion.model.DemoMode.ONLINE_AGENT,
+                cloudVisionUploadApproved = state.cloudVisionUploadApproved,
                 analysisStatus = state.photoAnalysisStatus,
                 findings = state.visionFindings.joinToString(" · ") { "${it.label} ${(it.confidence * 100).toInt()}%" },
                 onCapture = { runCatching { cameraLauncher.launch(onCreatePhotoUri()) } },
+                onCloudVisionUploadApproved = onCloudVisionUploadApproved,
                 onRun = onRun,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )

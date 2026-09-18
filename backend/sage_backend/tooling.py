@@ -4,7 +4,7 @@ import asyncio
 import json
 import math
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -100,11 +100,16 @@ class ToolRegistry:
             )
         }
 
-    def schemas_for(self, scenario: Scenario) -> list[dict[str, Any]]:
+    def schemas_for(
+        self,
+        scenario: Scenario,
+        allowed_tool_names: Collection[str] | None = None,
+    ) -> list[dict[str, Any]]:
         return [
             definition.openai_schema()
             for definition in self._definitions.values()
             if scenario in definition.scenarios
+            and (allowed_tool_names is None or definition.name in allowed_tool_names)
         ]
 
     async def execute(
@@ -114,10 +119,15 @@ class ToolRegistry:
         name: str,
         raw_arguments: str,
         request: AgentTaskRequest,
+        allowed_tool_names: Collection[str] | None = None,
     ) -> ToolExecution:
         started_at = time.monotonic()
         definition = self._definitions.get(name)
-        if definition is None or request.scenario not in definition.scenarios:
+        if (
+            definition is None
+            or request.scenario not in definition.scenarios
+            or (allowed_tool_names is not None and name not in allowed_tool_names)
+        ):
             return self._failed_execution(call_id, name, "tool_not_allowed", started_at)
         try:
             decoded = json.loads(raw_arguments or "{}")

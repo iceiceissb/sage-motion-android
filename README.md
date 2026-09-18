@@ -24,8 +24,8 @@
 - 活动会话自动恢复；应用意外退出后可从上次条件和任务继续。
 - 本地历史列表与事件时间线；已完成会话会永久保留生成的游记 PNG，可在历史详情中查看并再次分享；支持导出单次 CSV/全部会话 ZIP，也支持单条、详情或全部删除并清理关联照片和游记。
 - 研究员控制台支持逐状态预览、任务/条件切换、保存结束和数据检查。
-- 可调用真实相机并使用端侧 ML Kit 提取 400+ 类通用图像标签；模型打包在 APK 内，不需要 API Key。
-- APK 内置免费的 Vosk 中文离线语音模型，不再依赖手机是否安装 Android 系统语音服务；路线约束、语音问答和重新规划均可直接听写，并保留手动输入兜底。回答仍由同一任务 API 生成并可通过 TextToSpeech 播报和重播。
+- 可调用真实相机并使用端侧 ML Kit 提取 400+ 类通用图像标签；用户逐次授权后，生态演示还会把去除元数据的限尺寸 JPEG 交给服务端 Terra 直接看图。未授权、未配置后端或远程失败时仍只使用端侧线索。
+- 提供两种 APK：推荐下载的 `slimRelease` 使用手机系统语音服务并保留手动输入；`fullDebug` 内置免费的 Vosk 中文离线语音模型，适合必须统一离线听写条件的正式实验。两者的回答仍由同一任务 API 生成并可通过 TextToSpeech 播报和重播。
 - Gather / Weave / Afterglow / Fork / Morph 动效：素材汇聚编排、新旧路线因果连续和动态重规划。
 - v0.7 动效重构：双路线独立逐段计算与竞争、探索路径锚点、镜头光圈/候选框、真实音量驱动波形、素材数量驱动游记汇聚、新旧路线分段形变。
 - v0.8 圈搜与约束式规划：路线计算前支持偏好点选、文字/实际语音约束；多点识别结果以悬浮气泡叠加到照片，支持手势圈选、推荐/自定义问题、圈搜回答与游记留存。
@@ -43,6 +43,9 @@
 - v1.16 重规划与识别界面减法：更改路线结果页移除地图中央重复的高德路线摘要卡；多点识别结果由深色文字块改为分散在识别位置附近的半透明圆泡泡，只保留类别和置信度，减少对照片主体的遮挡。
 - v1.17 Agent runtime 收口：明确采用“一个主编排 Agent + skills + typed tools”的产品架构；由 `ParkAgentRuntime` 统一选择正式实验的确定性流程与生态演示的联网工具编排，高德地图与路线能力保持原实现不变。
 - v1.18 安全远程 Agent：新增 FastAPI 后端，通过 OpenAI Responses API 运行一个主模型；按 A/B1/B2/C/D 场景只暴露当前任务所需的 strict tools，并以 SSE 映射现有阶段/完成事件。Android 新增 `RemoteAgentApi`，未配置、超时或服务异常时明确回退本地编排；模型密钥只保存在服务端，绝不进入 APK。
+- v1.19 APK 体积治理：新增 `slim` / `full` 构建 flavor；推荐的 arm64 精简发布包移除 Vosk 运行库和 65 MiB 原始中文模型资产，改用手机系统语音识别，并启用 R8 与资源压缩。完整离线语音包继续保留，正式实验可按研究协议构建。
+- 当前 Agent 接入：A/B/B1/B2/C/D 已映射为服务端具名 skills；每个 skill 同时约束受信任任务规则、模型可见 tool schemas 和服务端执行白名单。生态演示默认主控模型为 `gpt-5.6-terra`，`gpt-5.6-luna` 仅建议用于低成本冒烟测试。
+- 当前多模态接入：B1 拍照页提供一次性云端看图授权；Android 把照片缩至最长边 1280 px、移除元数据并限制在 1.2 MB，后端校验后作为 Responses API 的 `input_image` 发送，且不把原图写入任务文本、日志或旅程记忆。
 - 当前工作区视觉重塑：主流程采用“数字公园信号层”语言，在真实高德地图上叠加深墨 HUD、酸性黄绿推荐路线、青色声场信号、珊瑚色备选/风险语义与少量等高线符号；高德 `MapView`、`RouteSearchV2`、定位和原生 `Polyline` 流程保持不变。
 
 ## AI Native Agent 与后端
@@ -50,7 +53,7 @@
 应用通过 `data/AiDemoApi.kt` 中的 `AiDemoApi` 获取阶段事件和任务结果，由
 `data/agent/ParkAgentRuntime.kt` 统一选择实现。实验模式使用
 `MockAiDemoApi`，因此无网络也能完整、可复现地演示。生态演示模式在配置后端地址时优先使用
-`RemoteAgentApi`：后端以一个主模型维护任务推理循环，按场景选择最小 strict tool 集，并把 SSE 进度映射为
+`RemoteAgentApi`：后端以一个主模型维护任务推理循环，按场景选择具名 skill 与最小 strict tool 集，并把 SSE 进度映射为
 `AiTaskEvent.StageChanged`、结构化 JSON 映射为 `AiTaskEvent.Completed`。未配置后端或远程失败时，
 `RemoteFirstAiDemoApi` 会明确回退原有 `ParkAgentApi` 确定性工具编排器。
 
@@ -73,22 +76,30 @@
 - 研究员控制台支持导出本次 CSV、本次会话 ZIP 和全部会话 ZIP；ZIP 内附 UTF-8 数据字典。
 - 历史页可删除单次或全部非活动会话；删除会同步清理该会话记录到的过程照片，操作前二次确认。
 - 结束会话不会删除数据；卸载应用会按 Android 规则清除应用私有数据，因此正式实验应及时导出备份。
-- 语音模型来自 Vosk `vosk-model-small-cn-0.22`（Apache 2.0）；首次启动会从 APK 资源解包到应用私有目录，之后可完全离线识别。
+- `full` flavor 的语音模型来自 Vosk `vosk-model-small-cn-0.22`（Apache 2.0）；首次启动会从 APK 资源解包到应用私有目录，之后可完全离线识别。`slim` flavor 不携带该模型，依赖手机系统语音服务，服务不可用时仍可手动输入。
 
 ## 运行
 
 推荐用 Android Studio 打开此文件夹，等待 Gradle 同步后，连接 Android 8.0（API 26）或更高版本手机并点击 Run。
 
-命令行构建：
+命令行构建推荐的 arm64 精简发布包：
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\build-app.ps1
 ```
 
+构建含 Vosk、兼容 arm64 与 32 位 ARM 的完整实验包：
+
+```powershell
+.\build-app.ps1 -GradleTasks @("testFullDebugUnitTest", "assembleFullDebug")
+```
+
 当前工作区含中文路径，Windows 下 Gradle/JUnit 可能无法正确解析类路径，因此脚本会临时映射一个纯英文盘符。构建完成后 APK 位于：
 
-`app/build/outputs/apk/debug/app-debug.apk`
+`app/build/outputs/apk/slim/release/app-slim-release.apk`
+
+精简发布包使用本机 debug key 签名，便于覆盖安装既有研究 APK；若公开上架应用商店，应改用项目私有 release key。正式条件比较若要求跨设备统一听写模型，请使用 `fullDebug`，不要把手机系统语音服务引入实验自变量。
 
 ## 实验操作
 
@@ -121,7 +132,7 @@ app/src/main/java/cn/tsinghua/sagemotion/
 ## 验证状态
 
 - JVM 单元测试：23 项通过。
-- 后端测试：13 项通过（含 Responses 请求契约、鉴权、SSE、工具白名单与生产配置校验）。
+- 后端测试：18 项通过（含 Responses 请求契约、鉴权、SSE、skill/tool 双层白名单与生产配置校验）。
 - Debug APK 构建：通过。
 - Android Lint：通过，无错误。
 - 390 × 844dp Compose 截图回归：路线约束、双路线计算、路线结果、草坪外环线与改道后的探索工作台、视觉提取/圈搜回答与圈搜语音、语音问答、路线式知识游记、动态调整、问卷与历史页共 21 个基线。

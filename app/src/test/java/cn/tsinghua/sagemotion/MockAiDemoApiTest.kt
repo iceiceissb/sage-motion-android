@@ -50,7 +50,8 @@ class MockAiDemoApiTest {
         val flowerResult = (flower.last() as AiTaskEvent.Completed).result
         assertTrue(restroomResult.summary.contains("南门"))
         assertTrue(flowerResult.summary.contains("花境"))
-        assertEquals("Vosk 离线语音 · 本地 Agent 路由", restroomResult.sourceLabel)
+        val expectedSpeechSource = if (BuildConfig.BUNDLED_OFFLINE_SPEECH) "Vosk 离线语音" else "手机系统语音"
+        assertTrue(restroomResult.sourceLabel.startsWith(expectedSpeechSource))
     }
 
     @Test

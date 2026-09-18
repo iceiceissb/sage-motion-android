@@ -37,6 +37,7 @@ class ParkAgentRuntime(
             val connectedApi = if (remoteUrl != null) {
                 RemoteFirstAiDemoApi(
                     remoteApi = RemoteAgentApi(
+                        context = context.applicationContext,
                         baseUrl = remoteUrl,
                         bearerToken = BuildConfig.SAGE_AGENT_CLIENT_TOKEN,
                     ),

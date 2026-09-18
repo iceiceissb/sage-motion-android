@@ -28,16 +28,14 @@ android {
     namespace = "cn.tsinghua.sagemotion"
     compileSdk = 35
 
+    flavorDimensions += "speech"
+
     defaultConfig {
         applicationId = "cn.tsinghua.sagemotion"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
-        versionName = "1.18.0-remote-agent-backend"
-
-        ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
-        }
+        versionCode = 29
+        versionName = "1.19.0-agent-deployment"
 
         manifestPlaceholders["AMAP_API_KEY"] = amapApiKey
         buildConfigField("boolean", "AMAP_API_KEY_CONFIGURED", amapApiKey.isNotBlank().toString())
@@ -49,9 +47,33 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    productFlavors {
+        create("slim") {
+            dimension = "speech"
+            versionNameSuffix = "-slim"
+            buildConfigField("boolean", "BUNDLED_OFFLINE_SPEECH", "false")
+            ndk {
+                // The recommended downloadable APK targets current 64-bit Android phones.
+                // Build the full flavor when 32-bit device support and bundled Vosk are required.
+                abiFilters += "arm64-v8a"
+            }
+        }
+        create("full") {
+            dimension = "speech"
+            buildConfigField("boolean", "BUNDLED_OFFLINE_SPEECH", "true")
+            ndk {
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // This is an installable research build, signed with the same local debug key as
+            // earlier APKs so it can upgrade them. Use a private release key for public stores.
+            signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -97,9 +119,11 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("com.google.mlkit:image-labeling:17.0.9")
-    implementation("net.java.dev.jna:jna:5.18.1@aar")
-    implementation("com.alphacephei:vosk-android:0.3.75@aar")
     implementation("com.amap.api:3dmap-location-search:10.1.200_loc6.4.9_sea9.7.4")
+
+    // Only the full flavor carries the Vosk runtime and its 65 MiB Chinese model assets.
+    add("fullImplementation", "net.java.dev.jna:jna:5.18.1@aar")
+    add("fullImplementation", "com.alphacephei:vosk-android:0.3.75@aar")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

@@ -1,5 +1,5 @@
 param(
-    [string[]]$GradleTasks = @("testDebugUnitTest", "assembleDebug")
+    [string[]]$GradleTasks = @("testSlimDebugUnitTest", "assembleSlimRelease")
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,8 +24,11 @@ try {
     & .\gradlew.bat --no-daemon @GradleTasks
     if ($LASTEXITCODE -ne 0) { throw "Gradle build failed with exit code $LASTEXITCODE" }
     Write-Host "Gradle tasks succeeded: $($GradleTasks -join ', ')"
-    if ($GradleTasks -contains "assembleDebug") {
-        Write-Host "APK: $projectRoot\app\build\outputs\apk\debug\app-debug.apk"
+    if ($GradleTasks -contains "assembleSlimRelease") {
+        Write-Host "Recommended APK: $projectRoot\app\build\outputs\apk\slim\release\app-slim-release.apk"
+    }
+    if ($GradleTasks -contains "assembleFullDebug") {
+        Write-Host "Full offline-speech APK: $projectRoot\app\build\outputs\apk\full\debug\app-full-debug.apk"
     }
 }
 finally {

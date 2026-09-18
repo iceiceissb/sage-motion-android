@@ -99,6 +99,7 @@ fun SageMotionApp(viewModel: ExperimentViewModel = viewModel()) {
             onClearVisualQuestion = viewModel::clearVisualQuestion,
             onCreatePhotoUri = viewModel::createPhotoCaptureUri,
             onPhotoCaptured = viewModel::onPhotoCaptureCompleted,
+            onCloudVisionUploadApproved = viewModel::setCloudVisionUploadApproved,
             onShareJourney = {
                 launchShare(viewModel.createJourneyShareIntent(), "分享知识游记")
             },

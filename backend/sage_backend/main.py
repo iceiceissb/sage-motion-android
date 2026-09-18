@@ -51,7 +51,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         content_length = request.headers.get("content-length")
         if content_length:
             try:
-                too_large = int(content_length) > 64 * 1024
+                limit = 2 * 1024 * 1024 if request.url.path == "/v1/agent/tasks:stream" else 64 * 1024
+                too_large = int(content_length) > limit
             except ValueError:
                 return JSONResponse(status_code=400, content={"detail": "invalid content-length"})
             if too_large:

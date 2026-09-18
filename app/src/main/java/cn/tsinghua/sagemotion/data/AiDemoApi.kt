@@ -1,5 +1,6 @@
 package cn.tsinghua.sagemotion.data
 
+import cn.tsinghua.sagemotion.BuildConfig
 import cn.tsinghua.sagemotion.model.AiStage
 import cn.tsinghua.sagemotion.model.AiTaskResult
 import cn.tsinghua.sagemotion.model.ExperimentScenario
@@ -15,6 +16,8 @@ data class AiTaskRequest(
     val scenario: ExperimentScenario,
     val prompt: String,
     val visionFindings: List<VisionFinding> = emptyList(),
+    /** Included only after the user approves a one-time remote multimodal upload. */
+    val visionImageUri: String? = null,
     val journeyContext: AgentJourneyContext = AgentJourneyContext(),
 )
 
@@ -144,7 +147,7 @@ class MockAiDemoApi(
 
     /**
      * 免费、离线且确定性的基础问答。正式条件比较不接入随机大模型，避免回答质量成为混淆变量；
-     * 生态演示中的语音转写使用 APK 内置的 Vosk 中文离线模型。
+     * 生态演示中的语音转写由当前 APK flavor 提供：完整版使用 Vosk，精简版使用手机语音服务。
      */
     private fun voiceResultFor(rawPrompt: String): AiTaskResult {
         val prompt = rawPrompt.trim()
@@ -197,7 +200,11 @@ class MockAiDemoApi(
             uncertainty = "位置与现场状态来自固定演示数据，出行时请以标牌和实际环境为准",
             primaryAction = "完成体验",
             evidence = listOf("语音转写：$prompt") + response.third,
-            sourceLabel = "Vosk 离线语音 · 本地 Agent 路由",
+            sourceLabel = if (BuildConfig.BUNDLED_OFFLINE_SPEECH) {
+                "Vosk 离线语音 · 本地 Agent 路由"
+            } else {
+                "手机系统语音 · 本地 Agent 路由"
+            },
         )
     }
 }

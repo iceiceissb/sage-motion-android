@@ -236,6 +236,8 @@ data class ExperimentUiState(
     val capturedPhotoUris: List<String> = emptyList(),
     val visionFindings: List<VisionFinding> = emptyList(),
     val photoAnalysisStatus: String? = null,
+    /** Session-memory only: never persisted, so restored sessions require fresh consent. */
+    val cloudVisionUploadApproved: Boolean = false,
     val visualQuestion: String = "",
     val visualAnswer: String? = null,
     val journeyPhotoMoments: List<JourneyPhotoMoment> = emptyList(),

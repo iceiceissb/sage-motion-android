@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import base64
+import binascii
 from enum import StrEnum
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+MAX_VISION_IMAGE_BYTES = 1_200_000
+MAX_VISION_IMAGE_DATA_URL_CHARS = 1_600_100
+VISION_IMAGE_PREFIXES = {
+    "data:image/jpeg;base64,": b"\xff\xd8\xff",
+    "data:image/png;base64,": b"\x89PNG\r\n\x1a\n",
+    "data:image/webp;base64,": b"RIFF",
+}
 
 
 class StrictModel(BaseModel):
@@ -46,6 +56,10 @@ class AgentTaskRequest(StrictModel):
     scenario: Scenario
     prompt: str = Field(min_length=1, max_length=2_000)
     vision_findings: list[VisionFinding] = Field(default_factory=list, max_length=20)
+    vision_image_data_url: str | None = Field(
+        default=None,
+        max_length=MAX_VISION_IMAGE_DATA_URL_CHARS,
+    )
     journey_context: JourneyContext = Field(default_factory=JourneyContext)
     client_capabilities: list[str] = Field(default_factory=list, max_length=16)
 
@@ -53,6 +67,34 @@ class AgentTaskRequest(StrictModel):
     @classmethod
     def normalize_prompt(cls, value: str) -> str:
         return " ".join(value.strip().split())
+
+    @field_validator("vision_image_data_url")
+    @classmethod
+    def validate_vision_image_data_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        prefix = next((candidate for candidate in VISION_IMAGE_PREFIXES if value.startswith(candidate)), None)
+        if prefix is None:
+            raise ValueError("vision image must be a JPEG, PNG, or WebP base64 data URL")
+        encoded = value[len(prefix) :]
+        try:
+            decoded = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as error:
+            raise ValueError("vision image contains invalid base64") from error
+        if not decoded or len(decoded) > MAX_VISION_IMAGE_BYTES:
+            raise ValueError("vision image exceeds the decoded size limit")
+        signature = VISION_IMAGE_PREFIXES[prefix]
+        if not decoded.startswith(signature):
+            raise ValueError("vision image bytes do not match the declared media type")
+        if prefix == "data:image/webp;base64," and decoded[8:12] != b"WEBP":
+            raise ValueError("vision image bytes do not match the declared media type")
+        return value
+
+    @model_validator(mode="after")
+    def restrict_vision_image_to_visual_scenario(self) -> AgentTaskRequest:
+        if self.vision_image_data_url is not None and self.scenario != Scenario.VISUAL:
+            raise ValueError("vision image is only accepted for the visual scenario")
+        return self
 
 
 class ResultMetric(StrictModel):

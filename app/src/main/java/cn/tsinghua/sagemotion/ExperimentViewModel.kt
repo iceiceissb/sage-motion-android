@@ -138,6 +138,11 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
                 else -> uiState.value.scenario.participantPrompt
             },
             visionFindings = if (uiState.value.scenario == ExperimentScenario.VISUAL) uiState.value.visionFindings else emptyList(),
+            visionImageUri = uiState.value.capturedPhotoUri.takeIf {
+                uiState.value.scenario == ExperimentScenario.VISUAL &&
+                    uiState.value.demoMode == DemoMode.ONLINE_AGENT &&
+                    uiState.value.cloudVisionUploadApproved
+            },
             journeyContext = AgentJourneyContext(
                 activeRouteName = uiState.value.activeRouteName,
                 routeReplanned = uiState.value.routeReplanned,
@@ -223,6 +228,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
                 capturedPhotoUri = null,
                 visionFindings = emptyList(),
                 photoAnalysisStatus = null,
+                cloudVisionUploadApproved = false,
                 visualQuestion = "",
                 visualAnswer = null,
             )
@@ -239,6 +245,18 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         val normalized = transcript.trim().take(160)
         uiState.value = uiState.value.copy(voiceTranscript = normalized)
         persistState()
+    }
+
+    fun setCloudVisionUploadApproved(approved: Boolean) {
+        val state = uiState.value
+        if (
+            state.scenario != ExperimentScenario.VISUAL ||
+            state.demoMode != DemoMode.ONLINE_AGENT ||
+            state.capturedPhotoUri == null
+        ) return
+        uiState.value = state.copy(cloudVisionUploadApproved = approved)
+        logEvent(if (approved) "cloud_vision_upload_approved" else "cloud_vision_upload_revoked")
+        // Deliberately not persisted: reopening the app always requires fresh consent.
     }
 
     fun setRouteConstraint(text: String) {
@@ -337,7 +355,8 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         uiState.value = uiState.value.copy(
             capturedPhotoUri = uri.toString(),
             capturedPhotoUris = (uiState.value.capturedPhotoUris + uri.toString()).distinct().takeLast(12),
-            photoAnalysisStatus = "正在进行端侧多模态识别…",
+            photoAnalysisStatus = "正在提取端侧图像标签…",
+            cloudVisionUploadApproved = false,
             visionFindings = emptyList(),
             visualQuestion = "",
             visualAnswer = null,
@@ -391,6 +410,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             capturedPhotoUri = null,
             capturedPhotoUris = emptyList(),
             visionFindings = emptyList(),
+            cloudVisionUploadApproved = false,
             routeConstraintText = "",
             replanRequestText = "",
             routePreferenceIds = setOf("shade", "rest"),
@@ -516,6 +536,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             capturedPhotoUri = null,
             capturedPhotoUris = emptyList(),
             visionFindings = emptyList(),
+            cloudVisionUploadApproved = false,
             routeConstraintText = "",
             replanRequestText = "",
             routePreferenceIds = setOf("shade", "rest"),
@@ -560,6 +581,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             statusMessage = "本次任务已取消，可安全重新开始",
             taskResult = null,
             resultPresentedAtMillis = 0L,
+            cloudVisionUploadApproved = false,
             taskMisoperationCount = nextMisoperations,
         )
         logEvent("task_cancelled", action = "cancel", details = "misoperation_count=$nextMisoperations")
@@ -578,6 +600,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             statusMessage = null,
             taskResult = null,
             resultPresentedAtMillis = 0L,
+            cloudVisionUploadApproved = false,
             taskMisoperationCount = nextMisoperations,
         )
         logEvent("task_reset", details = "misoperation_count=$nextMisoperations")
