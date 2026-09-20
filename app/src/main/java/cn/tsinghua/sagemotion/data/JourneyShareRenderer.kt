@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
@@ -14,7 +13,11 @@ import android.graphics.Typeface
 import android.net.Uri
 import cn.tsinghua.sagemotion.R
 import cn.tsinghua.sagemotion.model.ExperimentUiState
-import cn.tsinghua.sagemotion.model.RouteChoice
+import cn.tsinghua.sagemotion.model.GeoPoint
+import cn.tsinghua.sagemotion.model.continuousSegments
+import cn.tsinghua.sagemotion.data.vision.PhotoAssets
+import kotlin.math.cos
+import kotlin.math.max
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -47,12 +50,9 @@ class JourneyShareRenderer(private val context: Context) {
 
         val mapRect = RectF(60f, 220f, 1020f, 810f)
         drawPaperCard(canvas, paint, mapRect, 38f, Color.WHITE)
-        BitmapFactory.decodeResource(context.resources, R.drawable.park_map_background)?.let { map ->
-            drawBitmapCrop(canvas, map, RectF(78f, 238f, 1002f, 792f), 30f, .64f)
-            map.recycle()
-        }
-        drawRoute(canvas, paint, state.routeReplanned, state.replanCount, state.adoptedRoute)
-        drawTag(canvas, paint, 96f, 260f, "${state.activeRouteName} · 约 850m", SAGE_DARK)
+        drawJourneyGeometry(canvas, paint, state, RectF(96f, 310f, 984f, 690f))
+        val route = state.spatial.activeRoute
+        drawTag(canvas, paint, 96f, 260f, route?.let { "${it.name} · ${it.distanceMeters.toInt()}m" } ?: "尚未保存真实路线", SAGE_DARK)
         drawTag(canvas, paint, 732f, 716f, "${state.journeyPhotoMoments.size} 照片", SAGE)
 
         paint.color = INK
@@ -62,11 +62,11 @@ class JourneyShareRenderer(private val context: Context) {
         paint.color = MUTED
         paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         paint.textSize = 26f
-        canvas.drawText("照片、问题和当时的环境被留在同一条路线上", 68f, 926f, paint)
+        canvas.drawText("规划路线与实测轨迹分色显示；缺少定位时不推测位置", 68f, 926f, paint)
 
         val photoMoments = state.journeyPhotoMoments.takeLast(3)
         val renderedPhotos = if (photoMoments.isEmpty()) {
-            listOfNotNull(BitmapFactory.decodeResource(context.resources, R.drawable.flower_stimulus)?.let { it to null })
+            emptyList()
         } else {
             photoMoments.mapNotNull { moment -> decodeJourneyUri(moment.photoUri)?.let { it to moment } }
         }
@@ -80,7 +80,7 @@ class JourneyShareRenderer(private val context: Context) {
             paint.color = INK
             paint.textSize = 24f
             paint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            val label = moment?.label?.take(10) ?: if (index == 0) "沿途花境" else "旅程发现 ${index + 1}"
+            val label = moment.label.take(10)
             canvas.drawText(label, rect.left + 8f, rect.bottom + 37f, paint)
             photo.recycle()
         }
@@ -88,7 +88,7 @@ class JourneyShareRenderer(private val context: Context) {
         val voiceRect = RectF(68f, 1360f, 520f, 1532f)
         val replanRect = RectF(548f, 1360f, 1012f, 1532f)
         drawNote(canvas, paint, voiceRect, BLUE_PAPER, "语音发现 · ${state.voiceInteractionCount} 次", state.voiceTranscripts.lastOrNull().orEmpty().ifBlank { state.voiceTranscript.ifBlank { "边走边问，留下当时的想法" } }, "VOICE")
-        drawNote(canvas, paint, replanRect, ORANGE_PAPER, "路线调整 · ${state.replanCount} 次", if (state.routeReplanned) "未走的旧路段变灰，新路线绕开变化点" else if (state.replanCount > 0) "比较过改道方案，但未采用新路线" else "本次没有触发路线调整", "REPLAN")
+        drawNote(canvas, paint, replanRect, ORANGE_PAPER, "改道建议 · ${state.replanCount} 次", if (state.routeReplanned) "已采用不同路线；通行情况仍以现场为准" else if (state.replanCount > 0) "比较过改道方案，但未采用新路线" else "本次没有触发路线调整", "REPLAN")
 
         val question = state.journeyPhotoMoments.flatMap { it.questions }.lastOrNull()
         val quoteRect = RectF(68f, 1594f, 1012f, 1816f)
@@ -103,7 +103,7 @@ class JourneyShareRenderer(private val context: Context) {
         drawWrappedText(
             canvas,
             paint,
-            question?.answer ?: "湖边路线、照片、语音和变化点共同构成了今天的知识路径。",
+            question?.answer ?: "记录下本次旅程中的照片、问题和沿途想法。",
             96f,
             1702f,
             872f,
@@ -123,7 +123,7 @@ class JourneyShareRenderer(private val context: Context) {
     }.getOrNull()
 
     private fun decodeUri(raw: String): Bitmap? = runCatching {
-        context.contentResolver.openInputStream(Uri.parse(raw))?.use(BitmapFactory::decodeStream)
+        PhotoAssets(context).decode(Uri.parse(raw))
     }.getOrNull()
 
     private fun decodeJourneyUri(raw: String): Bitmap? = if (raw.startsWith("fixed://flower/")) {
@@ -166,83 +166,34 @@ class JourneyShareRenderer(private val context: Context) {
         canvas.restoreToCount(save)
     }
 
-    private fun drawRoute(
-        canvas: Canvas,
-        paint: Paint,
-        routeReplanned: Boolean,
-        replanCount: Int,
-        adoptedRoute: RouteChoice,
-    ) {
-        val route = Path().apply {
-            moveTo(122f, 704f)
-            if (adoptedRoute == RouteChoice.ALTERNATIVE && !routeReplanned) {
-                cubicTo(300f, 756f, 642f, 716f, 944f, 362f)
-            } else {
-                cubicTo(266f, 462f, 438f, 640f, 570f, 494f)
-                cubicTo(690f, 344f, 790f, 312f, 944f, 362f)
-            }
+    private fun drawJourneyGeometry(canvas: Canvas, paint: Paint, state: ExperimentUiState, area: RectF) {
+        val route = state.spatial.activeRoute?.points.orEmpty()
+        val track = state.spatial.track.map { it.point }
+        val markers = state.spatial.events.mapNotNull { it.location?.point }
+        val all = route + track + markers
+        if (all.isEmpty()) {
+            paint.color = MUTED; paint.textSize = 30f
+            canvas.drawText("尚无定位记录 · 照片与问答仍会保存", area.left, area.centerY(), paint)
+            return
         }
-        paint.style = Paint.Style.STROKE
-        paint.strokeCap = Paint.Cap.ROUND
-        paint.strokeWidth = 18f
-        paint.color = Color.WHITE
-        canvas.drawPath(route, paint)
-        paint.strokeWidth = 10f
-        paint.color = if (routeReplanned) Color.rgb(158, 167, 162) else SAGE_DARK
-        canvas.drawPath(route, paint)
-        if (routeReplanned) {
-            val walked = Path().apply {
-                moveTo(122f, 704f)
-                cubicTo(266f, 462f, 438f, 640f, 570f, 494f)
-            }
-            paint.strokeWidth = 10f
-            paint.color = SAGE_DARK
-            canvas.drawPath(walked, paint)
-            val fork = Path().apply {
-                moveTo(570f, 494f)
-                cubicTo(682f, 668f, 850f, 584f, 944f, 362f)
-            }
-            paint.strokeWidth = 18f
-            paint.color = Color.WHITE
-            canvas.drawPath(fork, paint)
-            paint.strokeWidth = 10f
-            paint.color = SAGE_DARK
-            canvas.drawPath(fork, paint)
-            paint.style = Paint.Style.FILL
-            paint.color = OCHRE
-            canvas.drawCircle(708f, 608f, 23f, paint)
-            paint.color = Color.WHITE
-            paint.textSize = 24f
-            paint.typeface = Typeface.DEFAULT_BOLD
-            canvas.drawText("↗", 696f, 617f, paint)
-        } else if (replanCount > 0) {
-            val proposedFork = Path().apply {
-                moveTo(570f, 494f)
-                cubicTo(682f, 668f, 850f, 584f, 944f, 362f)
-            }
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 16f
-            paint.color = Color.WHITE
-            canvas.drawPath(proposedFork, paint)
-            paint.strokeWidth = 8f
-            paint.color = OCHRE
-            paint.pathEffect = DashPathEffect(floatArrayOf(18f, 12f), 0f)
-            canvas.drawPath(proposedFork, paint)
-            paint.pathEffect = null
-            paint.style = Paint.Style.FILL
-            paint.color = OCHRE
-            canvas.drawCircle(708f, 608f, 20f, paint)
-            paint.color = Color.WHITE
-            paint.textSize = 20f
-            paint.typeface = Typeface.DEFAULT_BOLD
-            canvas.drawText("?", 702f, 615f, paint)
+        val meanLatitude = all.map { it.latitude }.average()
+        val longitudeScale = cos(Math.toRadians(meanLatitude)).coerceAtLeast(.01)
+        val minX = all.minOf { it.longitude * longitudeScale }; val maxX = all.maxOf { it.longitude * longitudeScale }
+        val minY = all.minOf { it.latitude }; val maxY = all.maxOf { it.latitude }
+        val scale = minOf(area.width() / max(maxX - minX, .00001), area.height() / max(maxY - minY, .00001))
+        fun x(p: GeoPoint) = (area.centerX() + (p.longitude * longitudeScale - (minX + maxX) / 2) * scale).toFloat()
+        fun y(p: GeoPoint) = (area.centerY() - (p.latitude - (minY + maxY) / 2) * scale).toFloat()
+        fun line(points: List<GeoPoint>, color: Int, width: Float) {
+            if (points.size < 2) return
+            val path = Path().apply { points.forEachIndexed { i, p -> if (i == 0) moveTo(x(p), y(p)) else lineTo(x(p), y(p)) } }
+            paint.style = Paint.Style.STROKE; paint.strokeCap = Paint.Cap.ROUND; paint.strokeWidth = width; paint.color = color
+            canvas.drawPath(path, paint); paint.style = Paint.Style.FILL
         }
-        paint.style = Paint.Style.FILL
-        paint.color = BLUE
-        canvas.drawCircle(462f, 552f, 22f, paint)
-        paint.color = Color.WHITE
-        paint.textSize = 23f
-        canvas.drawText("●", 454f, 560f, paint)
+        line(route, SAGE_DARK, 9f)
+        state.spatial.track.continuousSegments().forEach { line(it, BLUE, 6f) }
+        markers.forEach { p -> paint.color = OCHRE; canvas.drawCircle(x(p), y(p), 9f, paint) }
+        paint.color = MUTED; paint.textSize = 23f
+        canvas.drawText("绿色：高德规划路径   蓝色：实际定位记录   圆点：发现位置", area.left, area.bottom + 63f, paint)
     }
 
     private fun drawTag(canvas: Canvas, paint: Paint, x: Float, y: Float, text: String, color: Int) {

@@ -1,6 +1,9 @@
 package cn.tsinghua.sagemotion.ui
 
 import android.content.Intent
+import androidx.compose.runtime.CompositionLocalProvider
+import cn.tsinghua.sagemotion.ui.components.JourneyBinding
+import cn.tsinghua.sagemotion.ui.components.LocalJourneyBinding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
@@ -37,6 +40,7 @@ fun SageMotionApp(viewModel: ExperimentViewModel = viewModel()) {
             onExportAll = {
                 launchShare(viewModel.createAllSessionsShareIntent(), "导出全部实验数据")
             },
+            onShareZine = { launchShare(viewModel.createHistoryZineShareIntent(it), "分享历史 AI 纸刊") },
             onDeleteSession = viewModel::deleteHistorySession,
             onDeleteAll = viewModel::deleteAllHistory,
         )
@@ -64,6 +68,10 @@ fun SageMotionApp(viewModel: ExperimentViewModel = viewModel()) {
     }
 
     AmapPrivacyGate {
+        CompositionLocalProvider(LocalJourneyBinding provides JourneyBinding(
+            state, viewModel::onMapRoutes, viewModel::onMapLocation, viewModel::selectVisualRegion,
+            viewModel::generateZine, { launchShare(viewModel.createZineShareIntent(), "分享 AI 拾景纸刊") },
+        )) {
         ExperimentScreen(
             state = state,
             onRunScenario = viewModel::runCurrentScenario,
@@ -106,5 +114,6 @@ fun SageMotionApp(viewModel: ExperimentViewModel = viewModel()) {
             onBeginJourneySummary = viewModel::beginJourneySummary,
             onRecordMisoperation = viewModel::recordMisoperation,
         )
+    }
     }
 }

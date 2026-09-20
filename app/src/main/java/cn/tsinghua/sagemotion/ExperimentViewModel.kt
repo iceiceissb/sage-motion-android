@@ -31,6 +31,11 @@ import cn.tsinghua.sagemotion.model.stageSequenceFor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import cn.tsinghua.sagemotion.model.*
+import cn.tsinghua.sagemotion.data.bindRouteResult
+import cn.tsinghua.sagemotion.data.vision.PhotoAssets
 import java.io.File
 
 class ExperimentViewModel(application: Application) : AndroidViewModel(application) {
@@ -41,6 +46,10 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     private val journeyShareRenderer = JourneyShareRenderer(application)
     private var pendingCaptureUri: Uri? = null
     private var runJob: Job? = null
+    private var visualJob: Job? = null
+    private var zineJob: Job? = null
+    private val photoAssets = PhotoAssets(application)
+    private var latestFix: GeoFix? = null
 
     var uiState = androidx.compose.runtime.mutableStateOf(ExperimentUiState())
         private set
@@ -52,6 +61,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     fun startSession(
         participantId: String,
     ) {
+        latestFix = null
         val order = ConditionOrder.ABC
         val demoMode = DemoMode.ONLINE_AGENT
         val landmarkStyle = LandmarkStyle.DEPTH
@@ -94,6 +104,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun finishSession() {
+        latestFix = null
         if (!uiState.value.sessionStarted) return
         stopRun()
         persistJourneyImageIfAvailable()
@@ -137,6 +148,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
                 ExperimentScenario.ADJUST -> uiState.value.replanRequestText.ifBlank { uiState.value.scenario.participantPrompt }
                 else -> uiState.value.scenario.participantPrompt
             },
+            hasCapturedPhoto = uiState.value.capturedPhotoUri != null,
             visionFindings = if (uiState.value.scenario == ExperimentScenario.VISUAL) uiState.value.visionFindings else emptyList(),
             visionImageUri = uiState.value.capturedPhotoUri.takeIf {
                 uiState.value.scenario == ExperimentScenario.VISUAL &&
@@ -165,13 +177,14 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
                     when (event) {
                         is AiTaskEvent.StageChanged -> enterStage(event.stage)
                         is AiTaskEvent.Completed -> {
+                            val boundResult = bindCurrentRoutes(event.result)
                             val resultPresentedAt = System.currentTimeMillis()
                             val completedScenario = uiState.value.scenario
                             val completedVoice = uiState.value.voiceTranscript.trim()
                             uiState.value = uiState.value.copy(
                                 isRunning = false,
                                 resultVisible = true,
-                                taskResult = event.result,
+                                taskResult = boundResult,
                                 resultPresentedAtMillis = resultPresentedAt,
                                 voiceInteractionCount = uiState.value.voiceInteractionCount + if (completedScenario == ExperimentScenario.VOICE) 1 else 0,
                                 voiceTranscripts = if (completedScenario == ExperimentScenario.VOICE && completedVoice.isNotBlank()) {
@@ -182,6 +195,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
                                 visualInteractionCount = uiState.value.visualInteractionCount + if (completedScenario == ExperimentScenario.VISUAL) 1 else 0,
                                 replanCount = uiState.value.replanCount + if (completedScenario == ExperimentScenario.ADJUST) 1 else 0,
                             )
+                            if (completedScenario == ExperimentScenario.VOICE) recordJourneyEvent("voice", completedVoice)
                             logEvent(
                                 "task_result_visible",
                                 details = "source=${event.result.sourceLabel};live=${event.result.isLiveData};completion_time_ms=${(resultPresentedAt - uiState.value.taskStartedAtMillis).coerceAtLeast(0L)}",
@@ -226,6 +240,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         next = when (scenario) {
             ExperimentScenario.VISUAL -> next.copy(
                 capturedPhotoUri = null,
+                selectedImageRegion = null, selectedImageUri = null, selectedImageFindings = emptyList(),
                 visionFindings = emptyList(),
                 photoAnalysisStatus = null,
                 cloudVisionUploadApproved = false,
@@ -277,32 +292,70 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         persistState()
     }
 
+    fun selectVisualRegion(region: ImageRegion?) {
+        visualJob?.cancel()
+        val photo = uiState.value.capturedPhotoUri
+        uiState.value = uiState.value.copy(selectedImageRegion = region, selectedImageUri = null,
+            selectedImageFindings = emptyList(), visualAnswer = null, visualQuestion = "",
+            visualAnswerBusy = false, visualSelectionBusy = region != null && photo != null)
+        if (region == null || photo == null) return
+        visualJob = viewModelScope.launch {
+            try {
+                val cropped = withContext(Dispatchers.IO) { photoAssets.crop(photo, region) }
+                val findings = visionAnalyzer.analyzeSuspending(cropped)
+                uiState.value = uiState.value.copy(selectedImageUri = cropped.toString(), selectedImageFindings = findings,
+                    visualSelectionBusy = false, photoAnalysisStatus = "已识别选区 · ${findings.size} 条类别线索")
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                uiState.value = uiState.value.copy(visualSelectionBusy = false, photoAnalysisStatus = "选区分析失败，请重圈或重新拍摄")
+            }
+        }
+    }
+
     fun askVisualQuestion(question: String) {
         val normalized = question.trim().take(120)
-        if (normalized.isBlank()) return
-        val finding = uiState.value.visionFindings.maxByOrNull { it.confidence }
-        val usesFixedFlowerStimulus = uiState.value.capturedPhotoUri == null
-        val subject = visualSubject(finding?.label, usesFixedFlowerStimulus)
-        val confidence = finding?.let { "（端侧识别置信度 ${(it.confidence * 100).toInt()}%）" }.orEmpty()
-        val answer = when {
-            "是什么" in normalized || "什么花" in normalized -> if (usesFixedFlowerStimulus || subject.contains("花")) {
-                "画面中是一簇粉红色蔷薇科花卉，外观更接近月季或蔷薇。可以看到成簇花朵、五枚展开花瓣和有锯齿的复叶；仅凭这张照片还不能可靠确定具体品种。"
-            } else {
-                "圈选主体最可能是“$subject”。$confidence 这是端侧通用图像标签给出的类别线索，仍建议结合实物和现场标牌核查。"
-            }
-            "特点" in normalized -> if (usesFixedFlowerStimulus || subject.contains("花")) {
-                "这簇花呈粉红色，花朵成簇开放，花瓣较薄，叶片为绿色复叶且边缘有细锯齿。这些特征符合常见月季或蔷薇类植物，但不足以精确到品种。"
-            } else {
-                "$subject 的轮廓、表面和周围环境构成了当前可见特征。$confidence 建议结合圈选范围和现场距离继续观察。"
-            }
-            "为什么" in normalized || "原因" in normalized -> if (usesFixedFlowerStimulus || subject.contains("花")) {
-                "这类月季或蔷薇常被种在公园花境和步道旁：花期观赏性强，成簇生长容易形成连续景观，也能为昆虫提供花粉与花蜜。具体栽植原因仍以园区说明为准。"
-            } else {
-                "从画面线索看，它与当前位置的光照、植被和使用场景有关。$confidence 这是基于图像的解释，现场标牌会是更可靠的补充依据。"
-            }
-            "拍" in normalized || "记录" in normalized -> "适合记录。可以保留圈选主体，并让周围环境占画面约三分之一，这样知识游记既有细节也有地点语境。"
-            else -> "你的问题指向画面中的“$subject”。$confidence 目前可以确认它的基础视觉类别，但更细的身份或成因仍需要现场信息补充。"
+        val state = uiState.value
+        if (normalized.isBlank() || state.visualSelectionBusy || state.visualAnswerBusy) return
+        if (state.selectedImageRegion != null && state.capturedPhotoUri != null && state.selectedImageUri == null) {
+            uiState.value = state.copy(visualAnswer = "选区尚未识别成功，请重新圈选后提问。")
+            return
         }
+        visualJob?.cancel()
+        val selected = state.selectedImageUri != null
+        val findings = if (selected) state.selectedImageFindings else state.visionFindings
+        val subject = visualSubject(findings.maxByOrNull { it.confidence }?.label, state.capturedPhotoUri == null)
+        val prior = state.journeyPhotoMoments.lastOrNull { it.photoUri == state.capturedPhotoUri }?.questions.orEmpty().takeLast(3)
+        val request = AiTaskRequest(
+            scenario = ExperimentScenario.VISUAL,
+            prompt = buildString {
+                if (prior.isNotEmpty()) append("同一张照片此前的问答：" + prior.joinToString("；") { "${it.question}：${it.answer.take(180)}" } + "。")
+                append("本次问题：$normalized。" + if (selected) "图片是用户圈选区域的裁剪图。" else "请分析整张照片。")
+            },
+            hasCapturedPhoto = state.capturedPhotoUri != null,
+            visualQuestion = normalized,
+            visionIsRegion = selected,
+            visionFindings = findings,
+            visionImageUri = (state.selectedImageUri ?: state.capturedPhotoUri).takeIf {
+                state.cloudVisionUploadApproved && state.demoMode == DemoMode.ONLINE_AGENT
+            },
+        )
+        uiState.value = state.copy(visualAnswerBusy = true, visualQuestion = normalized, visualAnswer = null)
+        visualJob = viewModelScope.launch {
+            try {
+                agentRuntime.apiFor(state.demoMode).runTask(request).collect { event ->
+                    if (event is AiTaskEvent.Completed) {
+                        saveVisualAnswer(normalized, subject, event.result.summary)
+                        uiState.value = uiState.value.copy(visualAnswerBusy = false, visualAnswerSource = event.result.sourceLabel, taskResult = event.result)
+                    }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) {
+                uiState.value = uiState.value.copy(visualAnswerBusy = false, visualAnswer = "本次回答未完成，照片已保留，请重试。", visualAnswerSource = "请求失败")
+            }
+        }
+    }
+
+    private fun saveVisualAnswer(normalized: String, subject: String, answer: String) {
         // 固定刺激也必须按任务实例建独立节点，不能把第二次使用继续追加到第一次答案上。
         val currentPhoto = uiState.value.capturedPhotoUri
             ?: "fixed://flower/${uiState.value.visualInteractionCount.coerceAtLeast(1)}"
@@ -330,14 +383,15 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun clearVisualQuestion() {
-        uiState.value = uiState.value.copy(visualQuestion = "", visualAnswer = null)
+        visualJob?.cancel()
+        uiState.value = uiState.value.copy(visualQuestion = "", visualAnswer = null, visualAnswerBusy = false, visualAnswerSource = null)
         logEvent("circle_search_reset")
         persistState()
     }
 
     fun createPhotoCaptureUri(): Uri {
         val context = getApplication<Application>()
-        val directory = File(context.cacheDir, "camera_captures").apply { mkdirs() }
+        val directory = File(context.filesDir, "camera_captures").apply { mkdirs() }
         val file = File(directory, "sage_capture_${System.currentTimeMillis()}.jpg")
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
         pendingCaptureUri = uri
@@ -345,6 +399,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun onPhotoCaptureCompleted(success: Boolean) {
+        visualJob?.cancel()
         val uri = pendingCaptureUri
         if (!success || uri == null) {
             uiState.value = uiState.value.copy(photoAnalysisStatus = "未完成拍照，可继续使用固定实验图片")
@@ -354,6 +409,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         val moments = uiState.value.journeyPhotoMoments
         uiState.value = uiState.value.copy(
             capturedPhotoUri = uri.toString(),
+            selectedImageRegion = null, selectedImageUri = null, selectedImageFindings = emptyList(),
             capturedPhotoUris = (uiState.value.capturedPhotoUris + uri.toString()).distinct().takeLast(12),
             photoAnalysisStatus = "正在提取端侧图像标签…",
             cloudVisionUploadApproved = false,
@@ -364,10 +420,12 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
                 (moments + JourneyPhotoMoment(uri.toString(), "正在识别")).takeLast(12)
             },
         )
+        recordJourneyEvent("photo", uri.toString())
         logEvent("photo_captured", details = "source=device_camera;uri=$uri")
         visionAnalyzer.analyze(
             uri = uri,
             onSuccess = { findings ->
+                if (uiState.value.capturedPhotoUri != uri.toString()) return@analyze
                 val label = findings.maxByOrNull { it.confidence }?.label ?: "旅程发现"
                 uiState.value = uiState.value.copy(
                     visionFindings = findings,
@@ -383,7 +441,8 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
                 persistState()
             },
             onFailure = { error ->
-                uiState.value = uiState.value.copy(photoAnalysisStatus = "端侧识别未完成，仍可使用固定刺激继续")
+                if (uiState.value.capturedPhotoUri != uri.toString()) return@analyze
+                uiState.value = uiState.value.copy(photoAnalysisStatus = "端侧识别未完成，请重拍或授权云端分析")
                 logEvent("photo_analysis_failed", details = error.javaClass.simpleName)
                 persistState()
             },
@@ -392,6 +451,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun setConditionIndex(index: Int) {
+        latestFix = null
         if (index !in uiState.value.order.conditions.indices) return
         stopRun()
         uiState.value = uiState.value.copy(
@@ -423,6 +483,9 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             visualInteractionCount = 0,
             replanCount = 0,
             routeReplanned = false,
+            spatial = JourneySpatialState(),
+            generatedZinePath = null, zineMessage = null,
+            selectedImageRegion = null, selectedImageUri = null, selectedImageFindings = emptyList(),
             taskStartedAtMillis = 0L,
             resultPresentedAtMillis = 0L,
             taskMisoperationCount = 0,
@@ -440,6 +503,8 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun selectRoute(choice: RouteChoice) {
+        if (uiState.value.demoMode == DemoMode.ONLINE_AGENT && choice == RouteChoice.ALTERNATIVE &&
+            uiState.value.taskResult?.alternativeRouteId == null) return
         uiState.value = uiState.value.copy(selectedRoute = choice)
         logEvent("route_selected", action = choice.logValue)
         persistState()
@@ -447,6 +512,19 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
 
     fun adoptResult() {
         if (!uiState.value.resultVisible) return
+        val current = uiState.value
+        if (current.demoMode == DemoMode.ONLINE_AGENT && current.scenario in listOf(ExperimentScenario.ENVIRONMENT, ExperimentScenario.ADJUST)) {
+            val id = if (current.selectedRoute == RouteChoice.ALTERNATIVE) current.taskResult?.alternativeRouteId else current.taskResult?.recommendedRouteId
+            if (id == null && !(current.scenario == ExperimentScenario.ADJUST && current.spatial.activeRoute != null)) {
+                uiState.value = current.copy(statusMessage = "请等待地图返回真实路线后再采纳")
+                return
+            }
+            if (id != null) {
+                uiState.value = current.copy(spatial = current.spatial.copy(activeRouteId = id),
+                    routeReplanned = current.routeReplanned || (current.scenario == ExperimentScenario.ADJUST && id != current.spatial.activeRouteId))
+                if (current.scenario == ExperimentScenario.ADJUST && id != current.spatial.activeRouteId) recordJourneyEvent("replan", id)
+            }
+        }
         val currentScenario = uiState.value.scenario
         val now = System.currentTimeMillis()
         val performance = TaskPerformance(
@@ -496,7 +574,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             taskMisoperationCount = 0,
             taskAttemptCount = 0,
             pendingPostTaskSurvey = null,
-            routeReplanned = if (currentScenario == ExperimentScenario.ADJUST) {
+            routeReplanned = if (currentScenario == ExperimentScenario.ADJUST && uiState.value.demoMode == DemoMode.EXPERIMENT_OFFLINE) {
                 uiState.value.selectedRoute == RouteChoice.RECOMMENDED
             } else {
                 uiState.value.routeReplanned
@@ -549,6 +627,9 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             visualInteractionCount = 0,
             replanCount = 0,
             routeReplanned = false,
+            spatial = JourneySpatialState(),
+            generatedZinePath = null, zineMessage = null,
+            selectedImageRegion = null, selectedImageUri = null, selectedImageFindings = emptyList(),
             taskStartedAtMillis = 0L,
             resultPresentedAtMillis = 0L,
             taskMisoperationCount = 0,
@@ -678,6 +759,9 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
+    fun createHistoryZineShareIntent(fileName: String): Intent? = logger.sessionZineImage(fileName)
+        ?.let { shareIntent(it, "image/png", "SAGE 历史 AI 拾景纸刊") }
+
     fun createAllSessionsShareIntent(): Intent? =
         logger.createAllSessionsArchive()?.let { file -> shareIntent(file, "application/zip", "SAGE 全部实验数据") }
 
@@ -697,14 +781,48 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun generateZine(photoUri: String) {
+        if (uiState.value.zineBusy || photoUri !in uiState.value.capturedPhotoUris) return
+        val caption = uiState.value.journeyPhotoMoments.firstOrNull { it.photoUri == photoUri }?.label ?: "公园拾景"
+        uiState.value = uiState.value.copy(zineBusy = true, zineMessage = "正在生成，通常需要几分钟…")
+        logEvent("zine_generation_approved", details = "selected_photo_only=true")
+        zineJob = viewModelScope.launch {
+            try {
+                val image = cn.tsinghua.sagemotion.data.agent.RemoteZineApi(getApplication()).generate(photoUri, caption)
+                val saved = logger.storeZineImage(image) ?: error("图片保存失败")
+                image.delete()
+                uiState.value = uiState.value.copy(generatedZinePath = saved.absolutePath, zineMessage = "AI 生成纸刊已保存在本机", zineBusy = false)
+                logEvent("zine_generated")
+                persistState()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                uiState.value = uiState.value.copy(zineBusy = false, zineMessage = error.message ?: "生成失败，请稍后再试")
+                logEvent("zine_generation_failed")
+            }
+        }
+    }
+
+    fun createZineShareIntent(): Intent? = uiState.value.generatedZinePath?.let(::File)?.takeIf { it.isFile }
+        ?.let { shareIntent(it, "image/png", "我的 AI 拾景纸刊") }
+
     override fun onCleared() {
         runJob?.cancel()
+        visualJob?.cancel()
+        zineJob?.cancel()
         visionAnalyzer.close()
         super.onCleared()
     }
 
     private fun restoreActiveSession() {
-        val restored = sessionStore.restore()
+        val loaded = sessionStore.restore()
+        val restored = loaded?.let { old ->
+            val refs = (old.capturedPhotoUris + old.journeyPhotoMoments.map { it.photoUri } + listOfNotNull(old.capturedPhotoUri)).distinct().associateWith(photoAssets::ensurePersistent)
+            old.copy(capturedPhotoUri = old.capturedPhotoUri?.let { refs[it] ?: it },
+                capturedPhotoUris = old.capturedPhotoUris.map { refs[it] ?: it },
+                journeyPhotoMoments = old.journeyPhotoMoments.map { it.copy(photoUri = refs[it.photoUri] ?: it.photoUri) },
+                spatial = old.spatial.copy(events = old.spatial.events.map { it.copy(reference = refs[it.reference] ?: it.reference) }))
+        }
         if (restored == null) {
             uiState.value = ExperimentUiState(historySessions = logger.listSessionSummaries())
             return
@@ -750,6 +868,8 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
             replanRequestText = restored.replanRequestText,
             routePreferenceIds = restored.routePreferenceIds,
             adoptedRoute = restored.adoptedRoute,
+            spatial = restored.spatial,
+            generatedZinePath = logger.sessionZineImage(restored.logFileName)?.takeIf { it.name == restored.generatedZineName }?.absolutePath,
             capturedPhotoUri = restored.capturedPhotoUri,
             capturedPhotoUris = restored.capturedPhotoUris,
             visionFindings = restored.visionFindings,
@@ -804,8 +924,49 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun stopRun() {
+        zineJob?.cancel()
+        visualJob?.cancel()
+        uiState.value = uiState.value.copy(visualSelectionBusy = false, visualAnswerBusy = false, zineBusy = false,
+            zineMessage = if (uiState.value.zineBusy) "生成已中断，已有纸刊仍保留" else uiState.value.zineMessage)
         runJob?.cancel()
         runJob = null
+    }
+
+    fun onMapRoutes(routes: List<ParkRoutePlan>, guiding: Boolean) {
+        val current = uiState.value
+        if (!current.sessionStarted || routes.isEmpty()) return
+        val active = if (guiding && routes.none { it.id == current.spatial.activeRouteId }) routes.first().id else current.spatial.activeRouteId
+        if (routes == current.spatial.routes && active == current.spatial.activeRouteId) return
+        uiState.value = current.copy(spatial = current.spatial.copy(routes = routes, activeRouteId = active))
+        if (current.resultVisible && current.taskResult != null && current.scenario in listOf(ExperimentScenario.ENVIRONMENT, ExperimentScenario.ADJUST)) {
+            uiState.value = uiState.value.copy(taskResult = bindCurrentRoutes(current.taskResult))
+        }
+        logEvent("map_routes_received", details = "ids=${routes.joinToString { it.id }}")
+        persistState()
+    }
+
+    fun onMapLocation(fix: GeoFix) {
+        val now = System.currentTimeMillis()
+        if (!uiState.value.sessionStarted || !fix.usableAt(now)) return
+        latestFix = fix
+        val updated = uiState.value.spatial.record(fix, now)
+        if (updated != uiState.value.spatial) {
+            uiState.value = uiState.value.copy(spatial = updated)
+            persistState()
+        }
+    }
+
+    private fun recordJourneyEvent(kind: String, reference: String) {
+        val now = System.currentTimeMillis()
+        val spatial = uiState.value.spatial
+        uiState.value = uiState.value.copy(spatial = spatial.copy(events = (spatial.events +
+            JourneyEvent(kind, now, reference, latestFix?.takeIf { it.usableAt(now) })).takeLast(300)))
+    }
+
+    private fun bindCurrentRoutes(result: cn.tsinghua.sagemotion.model.AiTaskResult): cn.tsinghua.sagemotion.model.AiTaskResult {
+        val state = uiState.value
+        if (state.demoMode != DemoMode.ONLINE_AGENT || state.scenario !in listOf(ExperimentScenario.ENVIRONMENT, ExperimentScenario.ADJUST)) return result
+        return bindRouteResult(result, state.spatial.routes, state.spatial.activeRouteId, state.scenario == ExperimentScenario.ADJUST)
     }
 
     private fun routePreferenceLabels(ids: Set<String>): String = listOf(
@@ -828,6 +989,7 @@ class ExperimentViewModel(application: Application) : AndroidViewModel(applicati
 
     private fun persistState() {
         sessionStore.save(uiState.value, logger.activeLogFileName())
+        logger.storeSpatial(uiState.value.spatial)
     }
 
     private fun persistJourneyImageIfAvailable() {

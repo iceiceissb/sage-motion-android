@@ -73,3 +73,54 @@ async def test_skill_allowlist_is_enforced_during_execution() -> None:
     assert {schema["name"] for schema in schemas} == {"get_park_environment"}
     assert not result.ok
     assert result.error_code == "tool_not_allowed"
+
+
+@pytest.mark.asyncio
+async def test_place_failover_filters_radius_and_caches_provider():
+    calls = []
+
+    def handle(request):
+        calls.append(request)
+        if request.method == "POST":
+            return httpx.Response(503)
+        return httpx.Response(
+            200,
+            json=[
+                {"lat": "40.0155", "lon": "116.3272", "name": "Nearby", "type": "restaurant"},
+                {"lat": "41.0", "lon": "117.0", "name": "Too far", "type": "restaurant"},
+            ],
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        registry = ToolRegistry(client)
+        request = AgentTaskRequest(scenario=Scenario.VOICE, prompt="food nearby")
+
+        async def query():
+            return await registry.execute(
+                call_id="places",
+                name="search_nearby_places",
+                raw_arguments='{"category":"food","radius_meters":500}',
+                request=request,
+            )
+
+        first = await query()
+        second = await query()
+    assert first.ok
+    assert [p["name"] for p in first.data["places"]] == ["Nearby"]
+    assert first.provenance.source == "OpenStreetMap Nominatim"
+    assert second.provenance.cache_status == "fresh_cache"
+    assert len(calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_all_place_providers_failing_returns_no_fabricated_places():
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(503))) as client:
+        result = await ToolRegistry(client).execute(
+            call_id="places",
+            name="search_nearby_places",
+            raw_arguments='{"category":"food","radius_meters":500}',
+            request=AgentTaskRequest(scenario=Scenario.VOICE, prompt="food nearby"),
+        )
+    assert not result.ok
+    assert result.data == {}
+    assert not result.provenance.is_live_data

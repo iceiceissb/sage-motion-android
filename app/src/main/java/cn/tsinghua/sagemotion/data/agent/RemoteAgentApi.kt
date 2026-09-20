@@ -48,7 +48,7 @@ class RemoteAgentApi(
             }
         }
         try {
-            val visionImageDataUrl = request.visionImageUri?.let(imageEncoder::encodeDataUrl)
+            val visionImageDataUrl = request.visionImageUri?.let { imageEncoder.encodeDataUrl(it) ?: throw IOException("Unable to prepare authorized image") }
             val body = request.toRemoteJson(
                 requestId = UUID.randomUUID().toString().replace("-", ""),
                 visionImageDataUrl = visionImageDataUrl,
@@ -109,6 +109,9 @@ class RemoteFirstAiDemoApi(
                 if (event is AiTaskEvent.Completed) completed = true
                 emit(event)
             }
+            // A truncated SSE response can close cleanly without an error frame.
+            // It must still produce a result so the UI does not wait indefinitely.
+            if (!completed) throw IOException("Remote agent stream ended before completion")
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -136,6 +139,8 @@ private fun AiTaskRequest.toRemoteJson(requestId: String, visionImageDataUrl: St
     .put("request_id", requestId)
     .put("scenario", scenario.id)
     .put("prompt", prompt.take(2_000))
+    .put("vision_is_region", visionIsRegion)
+    .put("has_captured_photo", hasCapturedPhoto)
     .put(
         "vision_findings",
         JSONArray().apply {

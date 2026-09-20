@@ -235,6 +235,16 @@ data class ExperimentUiState(
     val capturedPhotoUri: String? = null,
     val capturedPhotoUris: List<String> = emptyList(),
     val visionFindings: List<VisionFinding> = emptyList(),
+    val selectedImageRegion: ImageRegion? = null,
+    val selectedImageUri: String? = null,
+    val selectedImageFindings: List<VisionFinding> = emptyList(),
+    val visualSelectionBusy: Boolean = false,
+    val visualAnswerBusy: Boolean = false,
+    val visualAnswerSource: String? = null,
+    val spatial: JourneySpatialState = JourneySpatialState(),
+    val generatedZinePath: String? = null,
+    val zineBusy: Boolean = false,
+    val zineMessage: String? = null,
     val photoAnalysisStatus: String? = null,
     /** Session-memory only: never persisted, so restored sessions require fresh consent. */
     val cloudVisionUploadApproved: Boolean = false,
@@ -255,7 +265,8 @@ data class ExperimentUiState(
         get() = order.conditions[conditionIndex]
 
     val activeRouteName: String
-        get() = when {
+        get() = spatial.activeRoute?.name ?: when {
+            demoMode == DemoMode.ONLINE_AGENT -> "尚未采纳路线"
             routeReplanned -> "林下连廊绕行线"
             adoptedRoute == RouteChoice.ALTERNATIVE -> ParkRoute.ALTERNATIVE_NAME
             else -> ParkRoute.NAME
@@ -307,6 +318,8 @@ data class AiTaskResult(
     val sourceUrl: String? = null,
     val isLiveData: Boolean = false,
     val attribution: String? = null,
+    val recommendedRouteId: String? = null,
+    val alternativeRouteId: String? = null,
 )
 
 data class SessionSummary(
@@ -339,6 +352,7 @@ data class SessionDetail(
     val summary: SessionSummary,
     val events: List<HistoryEvent>,
     val journeyImagePath: String? = null,
+    val zineImagePath: String? = null,
 )
 
 fun stageSequenceFor(scenario: ExperimentScenario): List<AiStage> = when (scenario) {

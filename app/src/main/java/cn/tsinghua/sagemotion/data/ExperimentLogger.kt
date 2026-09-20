@@ -117,6 +117,26 @@ class ExperimentLogger(private val context: Context) {
     fun sessionJourneyImage(fileName: String): File? =
         fileByName(fileName)?.let(::journeyImageFor)?.takeIf { it.isFile }
 
+    fun storeZineImage(source: File): File? = runCatching {
+        val session = latestLogFile() ?: return@runCatching null
+        source.copyTo(zineImageFor(session), overwrite = true)
+    }.getOrNull()
+
+    fun sessionZineImage(fileName: String): File? = fileByName(fileName)?.let(::zineImageFor)?.takeIf { it.isFile }
+
+    private var lastSpatial: cn.tsinghua.sagemotion.model.JourneySpatialState? = null
+    fun storeSpatial(spatial: cn.tsinghua.sagemotion.model.JourneySpatialState) {
+        val session = latestLogFile() ?: return
+        if (spatial == lastSpatial && spatialFor(session).isFile) return
+        val target = android.util.AtomicFile(spatialFor(session))
+        val stream = runCatching { target.startWrite() }.getOrNull() ?: return
+        try {
+            stream.write(JourneySpatialCodec.encode(spatial).toByteArray(Charsets.UTF_8))
+            target.finishWrite(stream)
+            lastSpatial = spatial
+        } catch (_: Exception) { target.failWrite(stream) }
+    }
+
     fun fileByName(fileName: String): File? {
         val candidate = File(logDirectory, File(fileName).name)
         return candidate.takeIf { it.isFile }
@@ -139,6 +159,8 @@ class ExperimentLogger(private val context: Context) {
         exportDirectory.listFiles()?.filter { it.isFile }?.forEach { it.delete() }
         if (activeName == null) {
             File(context.cacheDir, "camera_captures").listFiles()?.filter { it.isFile }?.forEach { it.delete() }
+            File(context.filesDir, "camera_captures").listFiles()?.filter { it.isFile }?.forEach { it.delete() }
+            File(context.cacheDir, "vision_crops").listFiles()?.filter { it.isFile }?.forEach { it.delete() }
         }
         return deleted
     }
@@ -167,6 +189,7 @@ class ExperimentLogger(private val context: Context) {
             summary = summary,
             events = events,
             journeyImagePath = sessionJourneyImage(file.name)?.absolutePath,
+            zineImagePath = sessionZineImage(file.name)?.absolutePath,
         )
     }
 
@@ -231,10 +254,16 @@ class ExperimentLogger(private val context: Context) {
     }
 
     private fun writeJourneyImage(zip: ZipOutputStream, file: File) {
-        val image = journeyImageFor(file).takeIf { it.isFile } ?: return
-        zip.putNextEntry(ZipEntry(image.name))
-        image.inputStream().use { it.copyTo(zip) }
-        zip.closeEntry()
+        listOf(journeyImageFor(file), zineImageFor(file), spatialFor(file)).filter { it.isFile }.forEach { artifact ->
+            zip.putNextEntry(ZipEntry(artifact.name))
+            artifact.inputStream().use { it.copyTo(zip) }
+            zip.closeEntry()
+        }
+        photoFiles(file).forEach { photo ->
+            zip.putNextEntry(ZipEntry("${file.nameWithoutExtension}_photos/${photo.name}"))
+            photo.inputStream().use { it.copyTo(zip) }
+            zip.closeEntry()
+        }
     }
 
     private fun taskMeasurementSummary(file: File): ByteArray {
@@ -303,15 +332,30 @@ class ExperimentLogger(private val context: Context) {
 
     private fun deletePhotoArtifacts(file: File) {
         journeyImageFor(file).delete()
+        zineImageFor(file).delete()
+        spatialFor(file).delete()
         readRows(file)
             .filter { it.size >= COLUMN_COUNT && it[8] == "photo_captured" }
             .mapNotNull { row -> row[12].substringAfter("uri=", "").takeIf { it.isNotBlank() } }
             .mapNotNull { raw -> runCatching { Uri.parse(raw).lastPathSegment }.getOrNull() }
-            .forEach { name -> File(context.cacheDir, "camera_captures/${File(name).name}").delete() }
+            .forEach { name ->
+                File(context.cacheDir, "camera_captures/${File(name).name}").delete()
+                File(context.filesDir, "camera_captures/${File(name).name}").delete()
+            }
     }
 
     private fun journeyImageFor(file: File): File =
         File(logDirectory, "${file.nameWithoutExtension}_journey.png")
+
+    private fun zineImageFor(file: File): File = File(logDirectory, "${file.nameWithoutExtension}_zine.png")
+    private fun spatialFor(file: File): File = File(logDirectory, "${file.nameWithoutExtension}_spatial.json")
+    private fun photoFiles(file: File): List<File> = readRows(file)
+        .filter { it.size >= COLUMN_COUNT && it[8] == "photo_captured" }
+        .mapNotNull { row -> runCatching { Uri.parse(row[12].substringAfter("uri=", "")).lastPathSegment }.getOrNull() }
+        .distinct().mapNotNull { name ->
+            File(context.filesDir, "camera_captures/${File(name).name}").takeIf { it.isFile }
+                ?: File(context.cacheDir, "camera_captures/${File(name).name}").takeIf { it.isFile }
+        }
 
     private companion object {
         const val COLUMN_COUNT = 13 // Old files remain readable; new measurement columns are appended.

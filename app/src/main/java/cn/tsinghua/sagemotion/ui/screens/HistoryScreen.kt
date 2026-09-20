@@ -41,6 +41,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -88,6 +89,7 @@ fun HistoryScreen(
     onExportAll: () -> Unit,
     onDeleteSession: (String) -> Unit,
     onDeleteAll: () -> Unit,
+    onShareZine: (String) -> Unit = {},
 ) {
     var pendingDelete by remember { mutableStateOf<SessionSummary?>(null) }
     var confirmDeleteAll by remember { mutableStateOf(false) }
@@ -98,6 +100,7 @@ fun HistoryScreen(
             onBack = onCloseDetail,
             onExport = { onExportSession(selectedDetail.summary.fileName) },
             onShareJourney = { onShareJourney(selectedDetail.summary.fileName) },
+            onShareZine = { onShareZine(selectedDetail.summary.fileName) },
             onDelete = { onDeleteSession(selectedDetail.summary.fileName) },
         )
         return
@@ -138,7 +141,7 @@ fun HistoryScreen(
                 ) {
                     Icon(Icons.Default.Download, null, modifier = Modifier.size(19.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("导出全部 CSV（ZIP）")
+                    Text("导出全部 CSV（ZIP）", color = LocalContentColor.current)
                 }
                 TextButton(
                     onClick = { confirmDeleteAll = true },
@@ -165,7 +168,7 @@ fun HistoryScreen(
             title = { Text("删除 ${session.participantId} 的会话？") },
             text = { Text("将永久删除本次 CSV 和该会话记录到的过程照片，无法恢复。") },
             confirmButton = {
-                Button(onClick = { onDeleteSession(session.fileName); pendingDelete = null }) { Text("确认删除") }
+                Button(onClick = { onDeleteSession(session.fileName); pendingDelete = null }) { Text("确认删除", color = LocalContentColor.current) }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("取消") } },
         )
@@ -177,7 +180,7 @@ fun HistoryScreen(
             title = { Text("删除全部历史数据？") },
             text = { Text("将删除全部非活动会话、关联照片和历史导出包。当前进行中的会话会受到保护。") },
             confirmButton = {
-                Button(onClick = { onDeleteAll(); confirmDeleteAll = false }) { Text("删除全部") }
+                Button(onClick = { onDeleteAll(); confirmDeleteAll = false }) { Text("删除全部", color = LocalContentColor.current) }
             },
             dismissButton = { TextButton(onClick = { confirmDeleteAll = false }) { Text("取消") } },
         )
@@ -313,6 +316,7 @@ private fun HistoryDetailScreen(
     onBack: () -> Unit,
     onExport: () -> Unit,
     onShareJourney: () -> Unit,
+    onShareZine: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
@@ -326,6 +330,9 @@ private fun HistoryDetailScreen(
             item { DetailSummary(detail.summary) }
             detail.journeyImagePath?.let { path ->
                 item { HistoryJourneyCard(path = path, onShare = onShareJourney) }
+            }
+            detail.zineImagePath?.let { path ->
+                item { HistoryJourneyCard(path = path, onShare = onShareZine, title = "本次 AI 拾景纸刊") }
             }
             item {
                 Text("事件时间线 · ${detail.events.size} 条", color = SageInk, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
@@ -353,27 +360,27 @@ private fun HistoryDetailScreen(
             onDismissRequest = { confirmDelete = false },
             title = { Text("删除本次会话？") },
             text = { Text("CSV、事件记录和关联过程照片都会永久删除。") },
-            confirmButton = { Button(onClick = { confirmDelete = false; onDelete() }) { Text("确认删除") } },
+            confirmButton = { Button(onClick = { confirmDelete = false; onDelete() }) { Text("确认删除", color = LocalContentColor.current) } },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } },
         )
     }
 }
 
 @Composable
-private fun HistoryJourneyCard(path: String, onShare: () -> Unit) {
+private fun HistoryJourneyCard(path: String, onShare: () -> Unit, title: String = "本次知识游记") {
     val bitmap = remember(path) { BitmapFactory.decodeFile(path)?.asImageBitmap() }
     if (bitmap == null) return
     Card(colors = CardDefaults.cardColors(containerColor = SagePanelRaised), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
                 Column(Modifier.weight(1f)) {
-                    Text("本次知识游记", color = SageInk, fontWeight = FontWeight.SemiBold)
+                    Text(title, color = SageInk, fontWeight = FontWeight.SemiBold)
                     Text("已随会话永久保存，可再次分享", color = SageMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
                 }
                 Button(onClick = onShare, shape = RoundedCornerShape(13.dp)) {
                     Icon(Icons.Default.Share, null, modifier = Modifier.size(17.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("分享")
+                    Text("分享", color = LocalContentColor.current)
                 }
             }
             Image(

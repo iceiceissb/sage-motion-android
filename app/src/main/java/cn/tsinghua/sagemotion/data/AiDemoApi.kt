@@ -19,6 +19,9 @@ data class AiTaskRequest(
     /** Included only after the user approves a one-time remote multimodal upload. */
     val visionImageUri: String? = null,
     val journeyContext: AgentJourneyContext = AgentJourneyContext(),
+    val hasCapturedPhoto: Boolean = false,
+    val visualQuestion: String? = null,
+    val visionIsRegion: Boolean = false,
 )
 
 /** Minimal, non-identifying journey memory sent to the remote primary agent. */
@@ -85,7 +88,7 @@ class MockAiDemoApi(
             evidence = emptyList(),
         )
 
-        ExperimentScenario.VISUAL -> AiTaskResult(
+        ExperimentScenario.VISUAL -> if (request.hasCapturedPhoto) capturedVisionResult(request) else AiTaskResult(
             title = if (request.visionFindings.isEmpty()) "识别结果：月季" else "端侧图像线索：${request.visionFindings.take(2).joinToString("、") { it.label }}",
             summary = if (request.visionFindings.isEmpty()) {
                 "较可能是丰花月季。叶缘与花瓣形态匹配，但单张照片无法确认具体品种。"
@@ -142,6 +145,26 @@ class MockAiDemoApi(
                 "新路线：增加 260 米，经过 2 处连廊",
                 "接管：可保留原路线或采用新路线",
             ),
+        )
+    }
+
+    private fun capturedVisionResult(request: AiTaskRequest): AiTaskResult {
+        val labels = request.visionFindings.take(5)
+        val scope = if (request.visionIsRegion) "圈选区域" else "整张照片"
+        val label = labels.firstOrNull()?.label
+        val summary = when {
+            label == null -> "$scope 暂未提取到可靠标签；可以扩大选区、重新拍摄，或授权云端看图。"
+            request.visualQuestion == null -> "$scope 提取到：${labels.joinToString("、") { it.label }}。这些是通用类别线索。"
+            else -> "关于“${request.visualQuestion}”：$scope 的主要类别线索是“$label”。本地分类模型无法解释细节、成因或精确物种；可授权云端看图继续询问。"
+        }
+        return AiTaskResult(
+            title = if (label == null) "尚无可靠识别结果" else "$scope：$label",
+            summary = summary,
+            uncertainty = "通用类别标签不是物种或物体身份鉴定",
+            primaryAction = "保存结果并返回",
+            evidence = labels.map { "端侧类别：${it.label} · ${(it.confidence * 100).toInt()}%" },
+            sourceLabel = "$scope · 端侧 ML Kit · 本地解读",
+            isLiveData = labels.isNotEmpty(),
         )
     }
 

@@ -33,6 +33,13 @@ class OnDeviceVisionAnalyzer(private val context: Context) {
             .addOnFailureListener(onFailure)
     }
 
+    suspend fun analyzeSuspending(uri: Uri): List<VisionFinding> = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+        analyze(uri,
+            onSuccess = { if (continuation.isActive) continuation.resumeWith(Result.success(it)) },
+            onFailure = { if (continuation.isActive) continuation.resumeWith(Result.failure(it)) },
+        )
+    }
+
     fun close() = labeler.close()
 
     private fun localizeLabel(label: String): String = LABEL_TRANSLATIONS[label] ?: label

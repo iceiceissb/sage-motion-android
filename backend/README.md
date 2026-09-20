@@ -181,3 +181,20 @@ data: {"request_id":"...","result":{...}}
 ```
 
 连接期间每 10 秒发送一次注释心跳，兼容常见反向代理。错误帧不会返回密钥、系统提示或上游原始响应正文。
+
+
+## 图像纸刊与能力检查（2026-09-19）
+
+`GET /v1/capabilities` 使用与任务接口相同的 bearer token，返回 `agent` 与 `zine` 开关。
+`POST /v1/journey/zine` 接收 `image_data_url`（与视觉任务相同的限尺寸 JPEG/PNG/WebP）和
+最多 500 字的 `caption`，返回 `image_base64`、`mime_type` 与 `source_label`。
+
+纸刊默认关闭。启用时设置 `SAGE_ZINE_ENABLED=true`，图像模型通过 `SAGE_IMAGE_MODEL` 配置，
+默认 `gpt-image-2.5-sunburst`。只在 Android 用户确认上传当前选中的照片后调用，结果由客户端保存。
+请求不自动重试；未启用返回 503，上游失败返回脱敏的 502。代理/负载均衡超时需至少 210 秒。
+
+Cloud Run 脚本可加 `-EnableZine`，可选 `-ImageModel`。部署后在项目根目录运行
+`.\check-backend.ps1`；该脚本只做只读状态检查，不发送用户照片，也不产生模型请求。
+`ready` 仅表示密钥已配置，模型权限和真实生成仍需实际验收。
+
+完整状态及设备验收边界见 [功能补齐说明](../FEATURE_COMPLETION_2026-09-19.md)。

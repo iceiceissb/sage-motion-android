@@ -1,5 +1,14 @@
 package cn.tsinghua.sagemotion.ui.components
 
+import androidx.compose.runtime.rememberUpdatedState
+import cn.tsinghua.sagemotion.model.GeoPoint
+import cn.tsinghua.sagemotion.model.continuousSegments
+import cn.tsinghua.sagemotion.model.GeoFix
+import cn.tsinghua.sagemotion.model.ParkRoutePlan
+import cn.tsinghua.sagemotion.model.RouteInstruction
+import cn.tsinghua.sagemotion.model.JourneyEvent
+import cn.tsinghua.sagemotion.model.ExperimentScenario
+import cn.tsinghua.sagemotion.model.RouteChoice
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -150,7 +159,7 @@ fun AmapPrivacyGate(content: @Composable () -> Unit) {
                 Text(
                     "路线页将使用高德地图 SDK 加载在线地图并请求步行路径。定位默认关闭；" +
                         "只有点击“开始园内指引”后，应用才会申请位置权限并在指引期间处理当前位置。" +
-                        "参与者编号不会发送给高德。",
+                        "指引期间记录的路线点和发现位置保存在本机，导出 ZIP 时会包含它们。参与者编号不会发送给高德。",
                 )
             },
             confirmButton = {
@@ -222,6 +231,8 @@ fun AmapParkMap(
     selectedJourneyPhotoIndex: Int = -1,
     onJourneyPhotoSelected: (Int) -> Unit = {},
 ) {
+    val binding = LocalJourneyBinding.current
+    val latestBinding = rememberUpdatedState(binding)
     val inspection = LocalInspectionMode.current
     val privacyAgreed = LocalAmapPrivacyAgreed.current
     if (inspection || !BuildConfig.AMAP_API_KEY_CONFIGURED || !privacyAgreed) {
@@ -304,7 +315,10 @@ fun AmapParkMap(
         }
     }
     val controller = remember(mapView) {
-        ParkRouteController(applicationContext, mapView.map)
+        ParkRouteController(applicationContext, mapView.map,
+            onRoutes = { routes, guiding -> latestBinding.value?.onRoutes?.invoke(routes, guiding) },
+            onLocation = { latestBinding.value?.onLocation?.invoke(it) },
+        )
     }
     val routeState = controller.uiState
 
@@ -333,10 +347,15 @@ fun AmapParkMap(
     }
 
     LaunchedEffect(controller, routeEnabled) {
-        if (routeEnabled) controller.planPreviewRoute() else controller.clearRoute()
+        if (routeEnabled) controller.planPreviewRoute(binding?.state?.spatial?.routes.orEmpty()) else controller.clearRoute()
     }
-    LaunchedEffect(controller, selectedAlternative) {
-        controller.selectAlternative(selectedAlternative)
+    val selectedId = binding?.state?.let { state ->
+        if (state.resultVisible && state.scenario in listOf(ExperimentScenario.ENVIRONMENT, ExperimentScenario.ADJUST)) {
+            if (state.selectedRoute == RouteChoice.ALTERNATIVE) state.taskResult?.alternativeRouteId else state.taskResult?.recommendedRouteId
+        } else state.spatial.activeRouteId
+    }
+    LaunchedEffect(controller, selectedAlternative, selectedId) {
+        controller.selectRoute(selectedAlternative, selectedId)
     }
     LaunchedEffect(
         controller,
@@ -345,6 +364,7 @@ fun AmapParkMap(
         journeyVoiceCount,
         journeyReplanCount,
         selectedJourneyPhotoIndex,
+        binding?.state?.spatial,
     ) {
         controller.updateJourneyPresentation(
             showAlternatives = showAlternativeRoutes,
@@ -353,6 +373,8 @@ fun AmapParkMap(
             replanCount = journeyReplanCount,
             selectedPhotoIndex = selectedJourneyPhotoIndex,
             onPhotoSelected = onJourneyPhotoSelected,
+            events = binding?.state?.spatial?.events.orEmpty(),
+            track = binding?.state?.spatial?.track.orEmpty(),
         )
     }
 
@@ -664,6 +686,8 @@ private fun ParkRouteStatusCard(
 private class ParkRouteController(
     private val context: Context,
     private val map: AMap,
+    private val onRoutes: (List<ParkRoutePlan>, Boolean) -> Unit,
+    private val onLocation: (GeoFix) -> Unit,
 ) : RouteSearchV2.OnRouteSearchListener {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val routeSearch = runCatching { RouteSearchV2(context) }.getOrNull()
@@ -675,6 +699,10 @@ private class ParkRouteController(
     private var locationClient: AMapLocationClient? = null
     private var plannedPaths: List<PlannedPath> = emptyList()
     private var selectedAlternative = false
+    private var selectedRouteId: String? = null
+    private var recordedEvents: List<JourneyEvent> = emptyList()
+    private var recordedTrack: List<GeoFix> = emptyList()
+    private var destroyed = false
     private var showAlternativeRoutes = true
     private var journeyPhotoUris: List<String> = emptyList()
     private var journeyVoiceCount = 0
@@ -701,9 +729,16 @@ private class ParkRouteController(
         }
     }
 
-    fun planPreviewRoute() {
+    fun planPreviewRoute(savedRoutes: List<ParkRoutePlan> = emptyList()) {
+        if (savedRoutes.isNotEmpty()) {
+            applyPaths(savedRoutes.map { r -> PlannedPath(r.points.map { LatLng(it.latitude, it.longitude) },
+                r.distanceMeters, r.durationSeconds,
+                r.instructions.map { step -> PlannedStep(step.text, step.points.map { LatLng(it.latitude, it.longitude) }) }) }, fitCamera = true)
+            return
+        }
         ParkRouteCache.previewPaths?.takeIf { it.isNotEmpty() }?.let {
             applyPaths(it, fitCamera = true)
+            onRoutes(routeSnapshots(), false)
             return
         }
         requestRoute(PARK_START_GCJ02, PARK_DESTINATION_GCJ02, guidanceRoute = false)
@@ -721,8 +756,9 @@ private class ParkRouteController(
         uiState = ParkRouteUiState(status = "等待开始路线规划")
     }
 
-    fun selectAlternative(alternative: Boolean) {
+    fun selectRoute(alternative: Boolean, id: String?) {
         selectedAlternative = alternative
+        selectedRouteId = id
         if (plannedPaths.isNotEmpty()) drawPlannedPaths(fitCamera = false)
     }
 
@@ -733,7 +769,11 @@ private class ParkRouteController(
         replanCount: Int,
         selectedPhotoIndex: Int,
         onPhotoSelected: (Int) -> Unit,
+        events: List<JourneyEvent>,
+        track: List<GeoFix>,
     ) {
+        recordedEvents = events
+        recordedTrack = track
         showAlternativeRoutes = showAlternatives
         journeyPhotoUris = photoUris.take(8)
         journeyVoiceCount = voiceCount.coerceIn(0, 6)
@@ -802,6 +842,7 @@ private class ParkRouteController(
     }
 
     fun destroy() {
+        destroyed = true
         guidanceRequested = false
         locationClient?.stopLocation()
         locationClient?.onDestroy()
@@ -843,6 +884,7 @@ private class ParkRouteController(
     private fun onLocationChanged(location: AMapLocation?) {
         if (location == null) return
         mainHandler.post {
+            if (destroyed) return@post
             if (location.errorCode != AMapLocation.LOCATION_SUCCESS) {
                 uiState = uiState.copy(
                     status = "定位失败（${location.errorCode}）",
@@ -868,6 +910,8 @@ private class ParkRouteController(
                 )
                 return@post
             }
+
+            onLocation(GeoFix(GeoPoint(point.latitude, point.longitude), location.time, location.accuracy))
 
             if (!pendingGuidanceRoute && uiState.status == "正在获取当前位置…") {
                 pendingGuidanceRoute = true
@@ -912,6 +956,7 @@ private class ParkRouteController(
 
     override fun onWalkRouteSearched(result: WalkRouteResultV2?, resultCode: Int) {
         mainHandler.post {
+            if (destroyed) return@post
             if (resultCode != AMapException.CODE_AMAP_SUCCESS || result == null) {
                 showRouteFailure(resultCode)
                 return@post
@@ -941,10 +986,17 @@ private class ParkRouteController(
             }
             if (!pendingGuidanceRoute) ParkRouteCache.previewPaths = parsed
             applyPaths(parsed, fitCamera = true)
+            onRoutes(routeSnapshots(), pendingGuidanceRoute)
             if (guidanceRequested) latestLocation?.let(::updateGuidance)
             pendingGuidanceRoute = false
         }
     }
+
+    private fun routeSnapshots(): List<ParkRoutePlan> = plannedPaths.mapIndexed { index, path ->
+        val points = path.points.map { GeoPoint(it.latitude, it.longitude) }
+        ParkRoutePlan(ParkRoutePlan.stableId(points), "步行路线 ${index + 1}", points, path.distanceMeters, path.durationSeconds,
+            path.steps.map { step -> RouteInstruction(step.instruction, step.points.map { GeoPoint(it.latitude, it.longitude) }) })
+    }.distinctBy { it.id }
 
     private fun applyPaths(paths: List<PlannedPath>, fitCamera: Boolean) {
         plannedPaths = paths
@@ -961,7 +1013,8 @@ private class ParkRouteController(
         photoMarkerIndices.clear()
         if (plannedPaths.isEmpty()) return
 
-        val selectedIndex = if (selectedAlternative && plannedPaths.size > 1) 1 else 0
+        val matchedIndex = routeSnapshots().indexOfFirst { it.id == selectedRouteId }
+        val selectedIndex = if (matchedIndex >= 0) matchedIndex else if (selectedAlternative && plannedPaths.size > 1) 1 else 0
         plannedPaths.forEachIndexed { index, path ->
             val selected = index == selectedIndex
             if (!showAlternativeRoutes && !selected) return@forEachIndexed
@@ -980,6 +1033,11 @@ private class ParkRouteController(
                     .zIndex(if (selected) 8f else 5f)
                     .geodesic(false),
             )
+        }
+        recordedTrack.continuousSegments().filter { it.size >= 2 }.forEach { segment ->
+            routePolylines += map.addPolyline(PolylineOptions()
+                .addAll(segment.map { LatLng(it.latitude, it.longitude) })
+                .width(9f).color(AndroidColor.rgb(57, 221, 214)).zIndex(10f))
         }
         val selectedPath = plannedPaths[selectedIndex]
         endpointMarkers += map.addMarker(
@@ -1010,49 +1068,26 @@ private class ParkRouteController(
         if (fitCamera) fitRoute(selectedPath.points)
     }
 
-    private data class JourneyMarkerSpec(
-        val kind: String,
-        val photoUri: String? = null,
-        val photoIndex: Int = -1,
-    )
-
     private fun drawJourneyMarkers(path: PlannedPath) {
         if (path.points.size < 2) return
-        val specs = buildList {
-            journeyPhotoUris.forEachIndexed { index, uri ->
-                add(JourneyMarkerSpec(kind = "photo", photoUri = uri, photoIndex = index))
-            }
-            repeat(journeyVoiceCount) { add(JourneyMarkerSpec(kind = "voice")) }
-            if (journeyReplanCount > 0) add(JourneyMarkerSpec(kind = "replan"))
-        }
-        specs.forEachIndexed { index, spec ->
-            val fraction = if (specs.size == 1) .50f else .12f + .76f * index / (specs.size - 1f)
-            val marker = map.addMarker(
-                MarkerOptions()
-                    .position(pointAtFraction(path.points, fraction))
-                    .anchor(.5f, .5f)
-                    .zIndex(16f + index)
-                    .title(
-                        when (spec.kind) {
-                            "photo" -> "第 ${spec.photoIndex + 1} 个照片发现"
-                            "voice" -> "沿途语音发现"
-                            else -> "路线调整节点"
-                        },
-                    )
-                    .icon(
-                        when (spec.kind) {
-                            "photo" -> photoMarkerIcon(
-                                spec.photoUri.orEmpty(),
-                                spec.photoIndex,
-                                selected = spec.photoIndex == selectedJourneyPhotoIndex,
-                            )
-                            "voice" -> textMarkerIcon("语", AndroidColor.rgb(57, 221, 214))
-                            else -> textMarkerIcon("改", AndroidColor.rgb(255, 116, 102))
-                        },
-                    ),
-            )
+        recordedEvents.filter { it.location != null }.sortedBy { it.timestamp }.takeLast(40).forEachIndexed { index, event ->
+            val point = event.location!!.point
+            val photoIndex = journeyPhotoUris.indexOf(event.reference)
+            if (event.kind == "photo" && photoIndex < 0) return@forEachIndexed
+            val marker = map.addMarker(MarkerOptions()
+                .position(LatLng(point.latitude, point.longitude)).anchor(.5f, .5f).zIndex(16f + index)
+                .title(when (event.kind) {
+                    "photo" -> "第 ${photoIndex + 1} 个照片发现"
+                    "voice" -> "沿途语音发现"
+                    else -> "路线调整节点"
+                })
+                .icon(when (event.kind) {
+                    "photo" -> photoMarkerIcon(event.reference, photoIndex, photoIndex == selectedJourneyPhotoIndex)
+                    "voice" -> textMarkerIcon("语", AndroidColor.rgb(57, 221, 214))
+                    else -> textMarkerIcon("改", AndroidColor.rgb(255, 116, 102))
+                }))
             journeyMarkers += marker
-            if (spec.kind == "photo") photoMarkerIndices[marker.id] = spec.photoIndex
+            if (event.kind == "photo") photoMarkerIndices[marker.id] = photoIndex
         }
     }
 
@@ -1124,15 +1159,9 @@ private class ParkRouteController(
         BitmapDescriptorFactory.fromBitmap(output)
     }.getOrElse { textMarkerIcon("景", AndroidColor.rgb(216, 255, 47)) }
 
-    private fun decodeMarkerBitmap(rawUri: String): Bitmap? {
-        val uri = Uri.parse(rawUri)
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-        var sample = 1
-        while (bounds.outWidth / sample > 320 || bounds.outHeight / sample > 320) sample *= 2
-        val options = BitmapFactory.Options().apply { inSampleSize = sample }
-        return context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
-    }
+    private fun decodeMarkerBitmap(rawUri: String): Bitmap? = runCatching {
+        cn.tsinghua.sagemotion.data.vision.PhotoAssets(context).decode(Uri.parse(rawUri), 320)
+    }.getOrNull()
 
     private fun textMarkerIcon(label: String, accentColor: Int) = run {
         val density = context.resources.displayMetrics.density
@@ -1163,7 +1192,8 @@ private class ParkRouteController(
     }
 
     private fun updateGuidance(location: LatLng) {
-        val selectedIndex = if (selectedAlternative && plannedPaths.size > 1) 1 else 0
+        val matchedIndex = routeSnapshots().indexOfFirst { it.id == selectedRouteId }
+        val selectedIndex = if (matchedIndex >= 0) matchedIndex else if (selectedAlternative && plannedPaths.size > 1) 1 else 0
         val path = plannedPaths.getOrNull(selectedIndex) ?: return
         val nearestIndex = path.points.indices.minByOrNull { index ->
             AMapUtils.calculateLineDistance(location, path.points[index])

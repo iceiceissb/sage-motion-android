@@ -63,6 +63,8 @@ class ToolDefinition:
 class ToolRegistry:
     def __init__(self, http: httpx.AsyncClient) -> None:
         self.http = http
+        self._place_fallback_lock = asyncio.Lock()
+        self._last_place_fallback = 0.0
         self._cache: dict[str, tuple[float, dict[str, Any], ToolProvenance]] = {}
         self._definitions = {
             definition.name: definition
@@ -245,15 +247,21 @@ class ToolRegistry:
                 response = await self.http.post(
                     endpoint,
                     content=urlencode({"data": query}),
+                    timeout=httpx.Timeout(3.0, connect=2.0),
                     headers={"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
                 )
                 response.raise_for_status()
-                payload = response.json()
+                candidate = response.json()
+                if not isinstance(candidate, dict) or not isinstance(candidate.get("elements"), list):
+                    raise ValueError("invalid place provider response")
+                payload = candidate
                 break
             except (httpx.HTTPError, ValueError):
                 continue
+        provider = "OpenStreetMap Overpass"
         if payload is None:
-            raise ValueError("all place providers failed")
+            provider = "OpenStreetMap Nominatim"
+            payload = await self._fallback_places(arguments)
 
         places: list[dict[str, Any]] = []
         for element in payload.get("elements", []):
@@ -284,7 +292,10 @@ class ToolRegistry:
                     or None,
                 }
             )
-        unique = {place["name"]: place for place in sorted(places, key=lambda item: item["distance_meters"])}
+        unique = {}
+        for place in sorted(places, key=lambda item: item["distance_meters"]):
+            if place["distance_meters"] <= arguments.radius_meters:
+                unique.setdefault(place["name"], place)
         data = {
             "places": list(unique.values())[:5],
             "query_center": "东升八家郊野公园南区固定实验点",
@@ -293,7 +304,7 @@ class ToolRegistry:
         }
         provenance = ToolProvenance(
             tool_name="search_nearby_places",
-            source="OpenStreetMap Overpass",
+            source=provider,
             source_url="https://www.openstreetmap.org/",
             fetched_at=_now_iso(),
             cache_status="live",
@@ -301,6 +312,52 @@ class ToolRegistry:
         )
         self._cache_put(cache_key, data, provenance, ttl_seconds=1_800)
         return data, provenance
+
+    async def _fallback_places(self, arguments: NearbyPlaceArguments) -> dict[str, Any]:
+        # Low-volume demo fallback: serialize and cache public geocoder queries.
+        dy = arguments.radius_meters / 111_320
+        dx = dy / math.cos(math.radians(PARK_LATITUDE))
+        async with self._place_fallback_lock:
+            await asyncio.sleep(max(0, 1.1 - (time.monotonic() - self._last_place_fallback)))
+            self._last_place_fallback = time.monotonic()
+            response = await self.http.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={
+                    "q": {"food": "[restaurant]", "scenic": "[attraction]", "restroom": "[toilets]"}[
+                        arguments.category
+                    ],
+                    "format": "jsonv2",
+                    "limit": 10,
+                    "namedetails": 1,
+                    "bounded": 1,
+                    "viewbox": (
+                        f"{PARK_LONGITUDE - dx},{PARK_LATITUDE + dy},"
+                        f"{PARK_LONGITUDE + dx},{PARK_LATITUDE - dy}"
+                    ),
+                },
+                headers={"User-Agent": "SageMotion/1.5 academic-research-demo", "Accept-Language": "zh-CN"},
+                timeout=httpx.Timeout(3.0, connect=2.0),
+            )
+            response.raise_for_status()
+            items = response.json()
+            if not isinstance(items, list):
+                raise ValueError("invalid geocoder response")
+            return {
+                "elements": [
+                    {
+                        "lat": item["lat"],
+                        "lon": item["lon"],
+                        "tags": {
+                            "name": item.get("namedetails", {}).get("name:zh")
+                            or item.get("name")
+                            or item.get("display_name", "").split(",")[0],
+                            "amenity": item.get("type", arguments.category),
+                        },
+                    }
+                    for item in items
+                    if isinstance(item, dict) and "lat" in item and "lon" in item
+                ]
+            }
 
     async def _compare_route_profiles(
         self,

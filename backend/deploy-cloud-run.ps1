@@ -13,6 +13,10 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$Model = "gpt-5.6-terra",
 
+    [string]$ImageModel = "gpt-image-2.5-sunburst",
+
+    [switch]$EnableZine,
+
     [switch]$SkipAndroidConfiguration
 )
 
@@ -156,6 +160,7 @@ foreach ($secretName in @("sage-openai-api-key", "sage-backend-auth-token")) {
 
 Push-Location $PSScriptRoot
 try {
+    $zineEnabledValue = $EnableZine.IsPresent.ToString().ToLowerInvariant()
     Invoke-Gcloud run deploy $ServiceName `
         --project $ProjectId `
         --source "." `
@@ -169,8 +174,8 @@ try {
         --concurrency 20 `
         --min-instances 0 `
         --max-instances 2 `
-        --timeout 60 `
-        --set-env-vars="SAGE_ENV=production,SAGE_OPENAI_MODEL=$Model,SAGE_OPENAI_REASONING_EFFORT=low,SAGE_RATE_LIMIT_PER_MINUTE=30" `
+        --timeout 210 `
+        --set-env-vars="SAGE_ENV=production,SAGE_OPENAI_MODEL=$Model,SAGE_OPENAI_REASONING_EFFORT=low,SAGE_RATE_LIMIT_PER_MINUTE=30,SAGE_ZINE_ENABLED=$zineEnabledValue,SAGE_IMAGE_MODEL=$ImageModel" `
         --set-secrets="OPENAI_API_KEY=sage-openai-api-key:latest,SAGE_BACKEND_AUTH_TOKEN=sage-backend-auth-token:latest" `
         --quiet
 }

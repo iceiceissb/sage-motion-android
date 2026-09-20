@@ -133,6 +133,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.tsinghua.sagemotion.R
+import cn.tsinghua.sagemotion.BuildConfig
+import cn.tsinghua.sagemotion.ui.components.LocalJourneyBinding
+import cn.tsinghua.sagemotion.model.ImageRegionMapping
+import cn.tsinghua.sagemotion.data.vision.PhotoAssets
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.unit.IntSize
 import cn.tsinghua.sagemotion.model.AiStage
 import cn.tsinghua.sagemotion.model.AiTaskResult
 import cn.tsinghua.sagemotion.model.ExperimentCondition
@@ -154,6 +160,7 @@ import cn.tsinghua.sagemotion.ui.components.SignalWaveform
 import cn.tsinghua.sagemotion.ui.components.MascotMood
 import cn.tsinghua.sagemotion.ui.components.MemoryWeaveMotion
 import cn.tsinghua.sagemotion.ui.components.JourneyStats
+import cn.tsinghua.sagemotion.ui.components.ZineGenerationPanel
 import cn.tsinghua.sagemotion.ui.components.ScrapbookJournal
 import cn.tsinghua.sagemotion.ui.components.VisualSemanticMotion
 import cn.tsinghua.sagemotion.ui.components.VoiceSemanticField
@@ -406,14 +413,13 @@ private fun ExplorationHub(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(start = 9.dp).weight(1f),
                     )
-                    SignalWaveform(Modifier.width(46.dp).height(15.dp))
-                    Text("探索中", color = SageSignalLime, fontSize = 9.sp, modifier = Modifier.padding(start = 8.dp))
+                    Text("探索中", color = SageSignalLime, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp))
                 }
             }
         }
         SignalHudSurface(
             shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
-            borderColor = SageSignalLime.copy(alpha = .56f),
+            borderColor = SageSignalLime.copy(alpha = .28f),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
@@ -430,22 +436,22 @@ private fun ExplorationHub(
                         Text(
                             "林间探索",
                             color = SageSignalLime,
-                            fontSize = 30.sp,
-                            lineHeight = 33.sp,
+                            fontSize = 28.sp,
+                            lineHeight = 34.sp,
                             fontFamily = FontFamily.SansSerif,
-                            fontWeight = FontWeight.Black,
+                            fontWeight = FontWeight.Bold,
                             letterSpacing = .5.sp,
                         )
-                        Text("让环境信号成为下一步线索", color = SageHudMuted, fontSize = 10.sp)
+                        Text("拍下发现，问问沿途，随时调整", color = SageHudMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
                     }
                     Text(
                         if (photoCount > 0) "$toolUseCount 次记录 · $photoCount 张照片" else "$toolUseCount 次记录",
-                        color = Color.White.copy(alpha = .66f),
-                        fontSize = 10.sp,
+                        color = SageHudMuted,
+                        fontSize = 11.sp,
                     )
                 }
                 SignalDivider(Modifier.fillMaxWidth().padding(top = 10.dp).height(1.dp), color = SageSignalLime)
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp).height(75.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp).height(84.dp), verticalAlignment = Alignment.CenterVertically) {
                     HubActionCard(HubTaskKind.PHOTO, "视觉发现", "${state.visualInteractionCount} 次", SageSignalLime, onPhoto, Modifier.weight(1f).fillMaxHeight())
                     SignalDivider(Modifier.width(1.dp).fillMaxHeight(.68f), vertical = true)
                     HubActionCard(HubTaskKind.VOICE, "语音提问", "${state.voiceInteractionCount} 次", SageSignalCyan, onVoice, Modifier.weight(1f).fillMaxHeight())
@@ -494,8 +500,8 @@ private fun HubActionCard(
             verticalArrangement = Arrangement.Center,
         ) {
             HubTaskGlyph(kind, accent)
-            Text(title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.padding(top = 3.dp))
-            Text(detail, color = accent, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 1.dp))
+            Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.padding(top = 5.dp))
+            Text(detail, color = accent, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 3.dp))
         }
     }
 }
@@ -559,7 +565,7 @@ private fun PhotoThumbnail(rawUri: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val bitmap = remember(rawUri) {
         runCatching {
-            context.contentResolver.openInputStream(Uri.parse(rawUri))?.use(BitmapFactory::decodeStream)?.asImageBitmap()
+            PhotoAssets(context).decode(Uri.parse(rawUri), 320).asImageBitmap()
         }.getOrNull()
     }
     if (bitmap != null) {
@@ -826,15 +832,17 @@ private fun AiStatusPanel(
                         )
                     }
                     if (semantic && state.isRunning) {
-                        AnimatedContent(targetState = stageDetail(state.aiStage, state.scenario), label = "stageDetail") { detail ->
+                        AnimatedContent(targetState = stageDetail(state.aiStage, state.scenario, state.demoMode == cn.tsinghua.sagemotion.model.DemoMode.ONLINE_AGENT), label = "stageDetail") { detail ->
                             Text(detail, color = SageHudMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
-                SignalWaveform(
-                    modifier = Modifier.width(if (state.isRunning) 52.dp else 38.dp).height(18.dp),
-                    color = if (state.scenario == ExperimentScenario.ADJUST) SageSignalCoral else SageSignalCyan,
-                )
+                if (state.isRunning) {
+                    SignalWaveform(
+                        modifier = Modifier.width(44.dp).height(18.dp),
+                        color = if (state.scenario == ExperimentScenario.ADJUST) SageSignalCoral else SageSignalCyan,
+                    )
+                }
                 if (!state.isRunning) {
                     Surface(color = SageSignalLime.copy(alpha = .10f), shape = RoundedCornerShape(5.dp), modifier = Modifier.padding(start = 7.dp)) {
                         Text(
@@ -854,21 +862,21 @@ private fun AiStatusPanel(
             }
             if (semantic && (state.isRunning || state.resultVisible)) {
                 Spacer(Modifier.height(8.dp))
-                SemanticSteps(stage = state.aiStage, scenario = state.scenario, showUncertainty = full)
+                SemanticSteps(stage = state.aiStage, scenario = state.scenario, showUncertainty = full, online = state.demoMode == cn.tsinghua.sagemotion.model.DemoMode.ONLINE_AGENT)
             }
         }
     }
 }
 
 @Composable
-private fun SemanticSteps(stage: AiStage, scenario: ExperimentScenario, showUncertainty: Boolean) {
+private fun SemanticSteps(stage: AiStage, scenario: ExperimentScenario, showUncertainty: Boolean, online: Boolean) {
     val labels = when (scenario) {
-        ExperimentScenario.ENVIRONMENT -> listOf("位置", "遮阴", "座椅")
+        ExperimentScenario.ENVIRONMENT -> if (online) listOf("路径", "距离", "建议") else listOf("位置", "遮阴", "座椅")
         ExperimentScenario.EXPLORE -> listOf("路线", "探索", "记录")
         ExperimentScenario.VISUAL -> listOf("取景", "识别", "解释")
         ExperimentScenario.VOICE -> listOf("聆听", "理解", "回答")
         ExperimentScenario.CREATE -> listOf("汇总", "生成", "编排")
-        ExperimentScenario.ADJUST -> listOf("检测", "绕行", "权衡")
+        ExperimentScenario.ADJUST -> if (online) listOf("变化", "路径", "选择") else listOf("检测", "绕行", "权衡")
     }
     val progress = when (stage) {
         AiStage.ACTIVATING -> 0
@@ -1000,7 +1008,7 @@ private fun VisualStartCard(
                     )
                     Column(Modifier.padding(start = 4.dp)) {
                         Text("允许项目后端将压缩照片发送给 OpenAI", color = SageInk, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                        Text("用于生成本次回答；本应用不写入旅程日志", color = SageMuted, fontSize = 10.sp)
+                        Text("授权本张照片及后续圈选问答；可随时关闭", color = SageMuted, fontSize = 10.sp)
                     }
                 }
             }
@@ -1102,7 +1110,7 @@ private fun RouteResultPanel(
     val routeTitle = if (choice == RouteChoice.RECOMMENDED) result.title else result.alternativeTitle ?: result.title
     SignalHudSurface(
         shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
-        borderColor = SageSignalLime.copy(alpha = .54f),
+        borderColor = SageSignalLime.copy(alpha = .28f),
         shadowElevation = 11.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -1115,44 +1123,48 @@ private fun RouteResultPanel(
                 Text(
                     "路线建议",
                     color = SageSignalLime,
-                    fontSize = 10.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(start = 7.dp),
                 )
-                SignalWaveform(Modifier.padding(start = 9.dp).width(34.dp).height(12.dp))
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(12.dp))
                 Text(
-                    result.sourceLabel.substringBefore("（").substringBefore("(").take(22),
+                    result.sourceLabel,
                     color = SageHudMuted,
-                    fontSize = 9.sp,
+                    fontSize = 11.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.weight(1f),
                 )
             }
             RouteVisualBoard(
                 title = routeTitle,
-                metrics = result.metrics.take(3).map { it.title to it.detail }.ifEmpty {
-                    listOf("阴凉" to "树荫优先", "座椅" to "3 处", "路程" to "约 12 分")
-                },
+                summary = if (choice == RouteChoice.RECOMMENDED) result.summary else "备选方案 · 具体距离与步行指引以地图为准",
+                metrics = if (choice == RouteChoice.RECOMMENDED) result.metrics.take(3).map { it.title to it.detail } else emptyList(),
                 alternative = choice == RouteChoice.ALTERNATIVE,
                 modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
             )
             SignalDivider(Modifier.fillMaxWidth().padding(top = 6.dp).height(1.dp), color = SageSignalLime)
             RouteChoiceCard(
                 title = "推荐路线",
-                detail = "湖边林荫线 · 途经湖边与林荫",
+                detail = result.title.substringAfter("："),
                 selected = choice == RouteChoice.RECOMMENDED,
                 accent = SageSignalLime,
                 onClick = { onChoice(RouteChoice.RECOMMENDED) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             )
+            if (result.alternativeTitle != null) {
             SignalDivider(Modifier.fillMaxWidth().height(1.dp))
             RouteChoiceCard(
                 title = "备选路线",
-                detail = "草坪外环线 · 更短但更晒",
+                detail = result.alternativeTitle?.substringAfter("：") ?: "查看地图中的备选路径",
                 selected = choice == RouteChoice.ALTERNATIVE,
                 accent = SageSignalCoral,
                 onClick = { onChoice(RouteChoice.ALTERNATIVE) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             )
+            }
             if (full) {
                 Surface(
                     color = SageSignalCoral.copy(alpha = .08f),
@@ -1163,9 +1175,9 @@ private fun RouteResultPanel(
                         Icon(Icons.Default.Info, null, tint = SageSignalCoral, modifier = Modifier.size(14.dp))
                         Text(
                             result.uncertainty.orEmpty(),
-                            color = Color.White.copy(alpha = .66f),
-                            fontSize = 10.sp,
-                            maxLines = 1,
+                            color = SageHudMuted,
+                            fontSize = 11.sp,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(start = 6.dp),
                         )
@@ -1193,6 +1205,7 @@ private fun RouteResultPanel(
 @Composable
 private fun RouteVisualBoard(
     title: String,
+    summary: String,
     metrics: List<Pair<String, String>>,
     alternative: Boolean,
     modifier: Modifier = Modifier,
@@ -1210,24 +1223,29 @@ private fun RouteVisualBoard(
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            if (alternative) "开阔外环，视野更宽" else "沿湖而行，树荫连续，步行更舒适",
+            summary,
             color = SageHudMuted,
-            fontSize = 10.sp,
-            modifier = Modifier.padding(top = 1.dp),
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 5.dp),
         )
-        Row(
-            Modifier.fillMaxWidth().padding(top = 6.dp).height(38.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            metrics.take(3).forEachIndexed { index, metric ->
-                if (index > 0) SignalDivider(Modifier.width(1.dp).fillMaxHeight(.72f), vertical = true)
-                Column(
-                    Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text(metric.first, color = if (index == 0) accent else Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                    Text(metric.second, color = SageHudMuted, fontSize = 9.sp, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+        if (metrics.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().padding(top = 10.dp).height(52.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                metrics.take(3).forEachIndexed { index, metric ->
+                    if (index > 0) SignalDivider(Modifier.width(1.dp).fillMaxHeight(.72f), vertical = true)
+                    Column(
+                        Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(metric.first, color = if (index == 0) accent else Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(metric.second, color = SageHudMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+                    }
                 }
             }
         }
@@ -1270,15 +1288,15 @@ private fun RouteChoiceCard(
                 Text(
                     title,
                     color = if (selected) accent else Color.White,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 )
                 Text(
                     detail,
                     color = SageHudMuted,
-                    fontSize = 10.sp,
-                    lineHeight = 14.sp,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
@@ -1309,6 +1327,19 @@ private fun MetricCard(title: String, detail: String, modifier: Modifier = Modif
 
 @Composable
 private fun RouteCompetitionCard(stage: AiStage, condition: ExperimentCondition) {
+    val live = LocalJourneyBinding.current?.state
+    if (live?.demoMode == cn.tsinghua.sagemotion.model.DemoMode.ONLINE_AGENT) {
+        Surface(color = SagePanelRaised, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("正在核对地图路径", color = SageInk, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                live.spatial.routes.take(2).forEach { route -> Text("${route.name} · ${route.summary}", color = SageMuted, fontSize = 12.sp) }
+                Text(if (live.spatial.routes.isEmpty()) "等待高德返回路线；不会推测距离和通行情况" else "比较实际距离；遮阴、座椅和封路仍需现场核实", color = SageMuted, fontSize = 11.sp)
+            }
+        }
+        return
+    }
+
     val progress by androidx.compose.animation.core.animateFloatAsState(
         targetValue = when (stage) {
             AiStage.LOCATING -> .18f
@@ -1385,6 +1416,9 @@ private fun VisualExperiment(
 ) {
     val context = LocalContext.current
     val inspection = LocalInspectionMode.current
+    val journeyBinding = LocalJourneyBinding.current
+    val density = LocalDensity.current
+    var viewport by remember { mutableStateOf(IntSize.Zero) }
     var circleCenter by remember { mutableStateOf<Offset?>(null) }
     var circleRadius by remember { mutableFloatStateOf(0f) }
     var circleReady by rememberSaveable(state.capturedPhotoUri) { mutableStateOf(inspection && state.resultVisible) }
@@ -1400,7 +1434,7 @@ private fun VisualExperiment(
     val capturedBitmap = remember(state.capturedPhotoUri) {
         state.capturedPhotoUri?.let { raw ->
             runCatching {
-                context.contentResolver.openInputStream(Uri.parse(raw))?.use(BitmapFactory::decodeStream)?.asImageBitmap()
+                PhotoAssets(context).decode(Uri.parse(raw)).asImageBitmap()
             }.getOrNull()
         }
     }
@@ -1410,16 +1444,18 @@ private fun VisualExperiment(
         circleReady = false
         customQuestion = ""
     }
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().onSizeChanged { viewport = it }.background(Color.Black)) {
         if (capturedBitmap != null) {
             Image(capturedBitmap, "刚拍摄的照片", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        } else {
+        } else if (state.capturedPhotoUri == null) {
             Image(
                 painter = painterResource(R.drawable.flower_stimulus),
                 contentDescription = "粉色月季",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
+        } else {
+            Text("照片暂不可用，请重新拍摄", color = SageMuted, modifier = Modifier.align(Alignment.Center))
         }
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .30f)))
         if (state.isRunning || state.resultVisible) {
@@ -1430,13 +1466,13 @@ private fun VisualExperiment(
             enter = fadeIn(tween(500)),
             exit = fadeOut(tween(180)),
         ) {
-            VisionFindingBubbleLayer(state.visionFindings)
+            VisionFindingBubbleLayer(if (state.selectedImageUri != null) state.selectedImageFindings else state.visionFindings)
         }
         if (state.resultVisible) {
             CircleSearchOverlay(
                 center = circleCenter,
                 radius = circleRadius,
-                enabled = state.visualAnswer == null,
+                enabled = state.visualAnswer == null && !state.visualAnswerBusy,
                 onStart = { point ->
                     circleCenter = point
                     circleRadius = 0f
@@ -1447,7 +1483,16 @@ private fun VisualExperiment(
                     val origin = circleCenter ?: point
                     circleRadius = hypot(point.x - origin.x, point.y - origin.y)
                 },
-                onEnd = { circleReady = circleRadius > 28f },
+                onEnd = {
+                    circleReady = circleRadius > 28f
+                    val region = if (circleReady && capturedBitmap != null) ImageRegionMapping.fromCircle(
+                        x = (circleCenter?.x ?: 0f) + with(density) { 8.dp.toPx() },
+                        y = (circleCenter?.y ?: 0f) + with(density) { 154.dp.toPx() },
+                        radius = circleRadius, viewWidth = viewport.width.toFloat(), viewHeight = viewport.height.toFloat(),
+                        imageWidth = capturedBitmap.width, imageHeight = capturedBitmap.height,
+                    ) else null
+                    journeyBinding?.onRegion?.invoke(region)
+                },
             )
         }
         Column(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp)) {
@@ -1465,7 +1510,10 @@ private fun VisualExperiment(
         if (!state.isRunning && !state.resultVisible) {
             VisualStartCard(
                 hasPhoto = state.capturedPhotoUri != null,
-                onlineAgent = state.demoMode == cn.tsinghua.sagemotion.model.DemoMode.ONLINE_AGENT,
+                onlineAgent = state.demoMode == cn.tsinghua.sagemotion.model.DemoMode.ONLINE_AGENT &&
+                    BuildConfig.SAGE_AGENT_BACKEND_URL.trim().let { url ->
+                        url.startsWith("https://") || (BuildConfig.DEBUG && url.startsWith("http://"))
+                    },
                 cloudVisionUploadApproved = state.cloudVisionUploadApproved,
                 analysisStatus = state.photoAnalysisStatus,
                 findings = state.visionFindings.joinToString(" · ") { "${it.label} ${(it.confidence * 100).toInt()}%" },
@@ -1482,7 +1530,10 @@ private fun VisualExperiment(
         ) {
             CircleSearchPanel(
                 circleReady = circleReady,
-                findings = state.visionFindings,
+                findings = if (state.selectedImageUri != null) state.selectedImageFindings else state.visionFindings,
+                busy = state.visualSelectionBusy || state.visualAnswerBusy,
+                source = state.visualAnswerSource,
+                initialSummary = state.taskResult?.summary,
                 usesFixedFlowerStimulus = state.capturedPhotoUri == null,
                 question = state.visualQuestion,
                 answer = state.visualAnswer,
@@ -1495,6 +1546,7 @@ private fun VisualExperiment(
                     circleRadius = 0f
                     circleReady = false
                     customQuestion = ""
+                    journeyBinding?.onRegion?.invoke(null)
                     onClearQuestion()
                 },
                 onCapture = { runCatching { cameraLauncher.launch(onCreatePhotoUri()) } },
@@ -1507,13 +1559,7 @@ private fun VisualExperiment(
 
 @Composable
 private fun VisionFindingBubbleLayer(findings: List<VisionFinding>) {
-    val visibleFindings = findings.take(5).ifEmpty {
-        listOf(
-            VisionFinding("主体区域", .82f),
-            VisionFinding("环境线索", .74f),
-            VisionFinding("表面特征", .68f),
-        )
-    }
+    val visibleFindings = findings.take(5)
     val floatMotion = androidx.compose.animation.core.rememberInfiniteTransition(label = "findingFloat")
     val floatY by floatMotion.animateFloat(
         initialValue = -3f,
@@ -1638,6 +1684,9 @@ private fun CircleSearchOverlay(
 @Composable
 private fun CircleSearchPanel(
     circleReady: Boolean,
+    busy: Boolean,
+    source: String?,
+    initialSummary: String?,
     findings: List<VisionFinding>,
     usesFixedFlowerStimulus: Boolean,
     question: String,
@@ -1659,6 +1708,7 @@ private fun CircleSearchPanel(
         else -> rawSubject
     }
     val panelState = when {
+        busy -> 3
         answer != null -> 2
         circleReady -> 1
         else -> 0
@@ -1675,14 +1725,20 @@ private fun CircleSearchPanel(
         ) { phase ->
             Column(Modifier.navigationBarsPadding().padding(horizontal = 19.dp, vertical = 16.dp)) {
                 when (phase) {
+                    3 -> {
+                        Text("正在分析选区并组织回答…", color = SageInk, fontSize = 18.sp)
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 14.dp))
+                    }
                     0 -> {
+                        if (!initialSummary.isNullOrBlank()) Text(initialSummary, color = SageMuted, fontSize = 12.sp,
+                            maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 10.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(color = SageMist, shape = CircleShape) {
                                 Icon(Icons.Default.Gesture, null, tint = SageSignalLime, modifier = Modifier.padding(9.dp).size(21.dp))
                             }
                             Column(Modifier.padding(start = 11.dp).weight(1f)) {
-                                Text("圈出你想问的部分", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                                Text("AI 已完成多点识别 · 在照片上拖动手指画圈", color = SageMuted, fontSize = 11.sp)
+                                Text("标记你感兴趣的部分", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                                Text("在照片上画圈，裁剪所选区域后重新识别", color = SageMuted, fontSize = 11.sp)
                             }
                             TextButton(onClick = onCapture) { Text("重拍") }
                         }
@@ -1706,7 +1762,7 @@ private fun CircleSearchPanel(
                             Icon(Icons.Default.Search, null, tint = SageSignalLime, modifier = Modifier.size(22.dp))
                             Column(Modifier.padding(start = 9.dp).weight(1f)) {
                                 Text("想了解“$subject”的什么？", color = SageInk, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                                Text("点击推荐问题会直接向 AI 提问", color = SageMuted, fontSize = 10.sp)
+                                Text("已分析圈选区域 · 可继续提问", color = SageMuted, fontSize = 10.sp)
                             }
                             TextButton(onClick = onClear) { Text("重圈") }
                         }
@@ -1768,7 +1824,7 @@ private fun CircleSearchPanel(
                             }
                             Column(Modifier.padding(start = 10.dp).weight(1f)) {
                                 Text(question, color = SageSignalLime, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                Text("AI 圈搜解答", color = SageMuted, fontSize = 10.sp)
+                                Text(source ?: "本地标签解读", color = SageMuted, fontSize = 10.sp)
                             }
                             TextButton(onClick = onClear) { Text("换个区域") }
                         }
@@ -1802,7 +1858,7 @@ private fun VisionSignalCard(state: ExperimentUiState) {
                     Text(
                         when (stage) {
                             AiStage.ACTIVATING -> "镜头已接入 · 建立视觉坐标"
-                            AiStage.RECOGNIZING -> "扫描画面 · 提取候选区域"
+                            AiStage.RECOGNIZING -> "读取照片 · 提取类别线索"
                             AiStage.REASONING -> "视觉线索正在聚合比较"
                             AiStage.UNCERTAIN -> "保留多个候选 · 标记不确定"
                             else -> "视觉记录已经形成"
@@ -2119,6 +2175,16 @@ private fun JourneyRoutePreview(
     stage: AiStage,
     modifier: Modifier = Modifier,
 ) {
+    val live = LocalJourneyBinding.current?.state
+    if (live?.demoMode == cn.tsinghua.sagemotion.model.DemoMode.ONLINE_AGENT) {
+        Box(modifier.clip(RoundedCornerShape(18.dp))) {
+            AmapParkMap(contentDescription = "已记录的旅程路线", modifier = Modifier.fillMaxSize(),
+                gesturesEnabled = false, journeyPhotoUris = moments.map { it.photoUri }, showAlternativeRoutes = false)
+            Text("正在整理 ${moments.size} 张照片与实测位置", color = SageInk, fontSize = 11.sp,
+                modifier = Modifier.align(Alignment.TopStart).background(SagePanel).padding(8.dp))
+        }
+        return
+    }
     val routeProgress by androidx.compose.animation.core.animateFloatAsState(
         targetValue = when (stage) {
             AiStage.SUMMARIZING -> .42f
@@ -2192,6 +2258,8 @@ private fun JourneyRoutePanel(
     onReset: () -> Unit,
     onShare: () -> Unit,
 ) {
+    val journeyState = LocalJourneyBinding.current?.state
+    val savedRoute = journeyState?.spatial?.activeRoute
     val inspection = LocalInspectionMode.current
     var selectedIndex by rememberSaveable(moments.size) { mutableIntStateOf(0) }
     // 真机始终从拾景纸刊进入；截图测试用未采用改线场景覆盖知识路线视图。
@@ -2216,11 +2284,11 @@ private fun JourneyRoutePanel(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(if (zineMode) "今天的拾景纸刊" else "今天走过的知识路线", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                    Text(if (zineMode) "真实照片作锚，让沿途发现长成一页纸上风景" else "点击沿线照片，回看当时的问题与回答", color = SageMuted, fontSize = 11.sp)
+                    Text(if (zineMode) "今天的拾景纸刊" else "今天的知识路线", color = SageInk, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (zineMode) "真实照片作锚，让沿途发现长成一页纸上风景" else "有定位的发现按实测位置标注；未定位记录保留在照片列表", color = SageMuted, fontSize = 11.sp)
                 }
-                IconButton(onClick = onShare, modifier = Modifier.background(SageMist, CircleShape)) {
-                    Icon(Icons.Default.Share, "分享知识游记", tint = SageSignalCyan)
+                if (!zineMode) IconButton(onClick = onShare, modifier = Modifier.background(SageMist, CircleShape)) {
+                    Icon(Icons.Default.Share, "导出知识路线图", tint = SageSignalCyan)
                 }
             }
             Row(
@@ -2243,13 +2311,14 @@ private fun JourneyRoutePanel(
                 ) { Text("知识路线", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
             }
             if (zineMode) {
+                ZineGenerationPanel(moments.getOrNull(selectedIndex)?.photoUri, Modifier.padding(top = 12.dp))
                 ScrapbookJournal(
                     moments = moments,
                     landmarks = ParkRoute.LANDMARKS,
                     stats = JourneyStats(
-                        routeName = ParkRoute.NAME,
-                        totalMinutes = ParkRoute.TOTAL_MINUTES,
-                        distanceMeters = ParkRoute.TOTAL_DISTANCE_METERS,
+                        routeName = savedRoute?.name ?: if (inspection) ParkRoute.NAME else "尚未采纳路线",
+                        totalMinutes = savedRoute?.let { kotlin.math.ceil(it.durationSeconds / 60.0).toInt() } ?: if (inspection) ParkRoute.TOTAL_MINUTES else 0,
+                        distanceMeters = savedRoute?.distanceMeters?.toInt() ?: if (inspection) ParkRoute.TOTAL_DISTANCE_METERS else 0,
                         photoCount = moments.size,
                         questionCount = moments.sumOf { it.questions.size },
                         voiceCount = voiceCount,
@@ -2286,7 +2355,7 @@ private fun JourneyRoutePanel(
                         JourneyMaterialSummary(
                             icon = Icons.AutoMirrored.Filled.AltRoute,
                             title = if (routeReplanned) "$replanCount 次路线调整" else "$replanCount 次重规划建议",
-                            detail = if (routeReplanned) "节点已落在当前高德路线" else "建议已记录 · 不叠加虚拟线路",
+                            detail = if (routeReplanned) "已保存采用的路线；有定位时标记调整位置" else "建议已记录",
                             accent = SageSignalCoral,
                             modifier = Modifier.weight(1f),
                         )
@@ -2307,7 +2376,7 @@ private fun JourneyRoutePanel(
                 }
                 } else {
                 Surface(color = SagePanelSoft, shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth().padding(top = 11.dp)) {
-                    Text("这次旅程还没有照片节点。下次可在探索途中拍照圈搜，照片和问题会自动落到路线上。", color = SageMuted, fontSize = 12.sp, lineHeight = 18.sp, modifier = Modifier.padding(14.dp))
+                    Text("这次旅程还没有照片节点。下次可在探索途中拍照圈搜，照片和问题会自动保存在列表中。", color = SageMuted, fontSize = 12.sp, lineHeight = 18.sp, modifier = Modifier.padding(14.dp))
                 }
                 }
             }
@@ -2404,14 +2473,16 @@ private fun JourneyPhotoImage(rawUri: String, contentDescription: String, modifi
     val bitmap = remember(rawUri) {
         rawUri.takeIf { it.isNotBlank() }?.let { value ->
             runCatching {
-                context.contentResolver.openInputStream(Uri.parse(value))?.use(BitmapFactory::decodeStream)?.asImageBitmap()
+                PhotoAssets(context).decode(Uri.parse(value), 320).asImageBitmap()
             }.getOrNull()
         }
     }
     if (bitmap != null) {
         Image(bitmap, contentDescription, modifier.clip(CircleShape), contentScale = ContentScale.Crop)
-    } else {
+    } else if (rawUri.startsWith("fixed://") || LocalInspectionMode.current) {
         Image(painterResource(R.drawable.flower_stimulus), contentDescription, modifier.clip(CircleShape), contentScale = ContentScale.Crop)
+    } else {
+        Box(modifier.background(SagePanelSoft), contentAlignment = Alignment.Center) { Icon(Icons.Default.CameraAlt, "照片不可用", tint = SageMuted) }
     }
 }
 
@@ -2440,7 +2511,7 @@ private fun JourneyMomentDetail(moment: JourneyPhotoMoment, position: Int, total
             }
             if (moment.questions.isEmpty()) {
                 Text(
-                    "这张照片已经落在路线节点上；当时没有继续提问。",
+                    "这张照片已保存；当时没有继续提问。",
                     color = SageMuted,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 11.dp).background(SagePanelSoft, sageBubbleShape(3)).padding(11.dp),
@@ -2617,6 +2688,19 @@ private fun ReplanInputCard(
 
 @Composable
 private fun ReplanDecisionCard(stage: AiStage) {
+    val live = LocalJourneyBinding.current?.state
+    if (live?.demoMode == cn.tsinghua.sagemotion.model.DemoMode.ONLINE_AGENT) {
+        Surface(color = SagePanelRaised, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("正在核对地图路径", color = SageInk, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                live.spatial.routes.take(2).forEach { route -> Text("${route.name} · ${route.summary}", color = SageMuted, fontSize = 12.sp) }
+                Text(if (live.spatial.routes.isEmpty()) "等待高德返回路线；不会推测距离和通行情况" else "比较实际距离；遮阴、座椅和封路仍需现场核实", color = SageMuted, fontSize = 11.sp)
+            }
+        }
+        return
+    }
+
     val progress by androidx.compose.animation.core.animateFloatAsState(
         targetValue = when (stage) {
             AiStage.REPLANNING -> .66f
@@ -3116,7 +3200,13 @@ private fun ResearcherPanel(
     }
 }
 
-private fun stageDetail(stage: AiStage, scenario: ExperimentScenario): String = when (stage) {
+private fun stageDetail(stage: AiStage, scenario: ExperimentScenario, online: Boolean): String = if (online) when (stage) {
+    AiStage.LOCATING -> "读取公园地图与可用路径"
+    AiStage.REASONING, AiStage.REPLANNING, AiStage.DECIDING -> "结合已有数据核对建议与信息缺口"
+    AiStage.RECOGNIZING -> "提取照片中的类别线索"
+    AiStage.SUMMARIZING, AiStage.GENERATING, AiStage.EDITING -> "整理本次旅程记录"
+    else -> stage.label
+} else when (stage) {
     AiStage.ACTIVATING -> "正在准备所需能力"
     AiStage.LOCATING -> "确认当前位置与公园入口"
     AiStage.LISTENING -> "识别你的语音问题"
@@ -3144,12 +3234,14 @@ private fun statusTitle(state: ExperimentUiState, semantic: Boolean): String = w
     state.isRunning && !semantic -> "正在处理…"
     state.isRunning -> state.aiStage.label
     state.resultVisible && semantic -> when (state.scenario) {
-        ExperimentScenario.ENVIRONMENT -> "已比较 2 条路线"
+        ExperimentScenario.ENVIRONMENT -> if (state.demoMode == cn.tsinghua.sagemotion.model.DemoMode.ONLINE_AGENT) {
+            if (state.spatial.routes.isEmpty()) "等待地图路径" else "已收到 ${state.spatial.routes.size} 条路线"
+        } else "已比较 2 条路线"
         ExperimentScenario.EXPLORE -> "探索工具已就绪"
         ExperimentScenario.VISUAL -> "识别与比较完成"
         ExperimentScenario.VOICE -> "回答已生成"
         ExperimentScenario.CREATE -> "知识游记已生成"
-        ExperimentScenario.ADJUST -> "动态路线已更新"
+        ExperimentScenario.ADJUST -> "改道方案待确认"
     }
     state.aiStage == AiStage.COMPLETE -> state.statusMessage ?: "已完成"
     else -> state.statusMessage ?: state.scenario.phaseLabel

@@ -1,4 +1,5 @@
 package cn.tsinghua.sagemotion.ui.components
+import cn.tsinghua.sagemotion.ui.theme.SagePanelSoft
 
 import android.graphics.BitmapFactory
 import android.graphics.Color as AndroidColor
@@ -301,9 +302,9 @@ private fun ScrapbookHeader(stats: JourneyStats, reveal: Float) {
             Text(stats.dateLabel, color = SageMuted, fontSize = 12.sp)
             Box(Modifier.padding(horizontal = 7.dp).size(3.dp).background(SageGold, CircleShape))
             // 总耗时：设计建议里点名的可选项之一。
-            Text("共 ${stats.totalMinutes} 分钟", color = SageMuted, fontSize = 12.sp)
+            Text(if (stats.totalMinutes > 0) "路线预计 ${stats.totalMinutes} 分钟" else "路线时长未记录", color = SageMuted, fontSize = 12.sp)
             Box(Modifier.padding(horizontal = 7.dp).size(3.dp).background(SageGold, CircleShape))
-            Text("${stats.distanceMeters} 米", color = SageMuted, fontSize = 12.sp)
+            Text(if (stats.distanceMeters > 0) "规划 ${stats.distanceMeters} 米" else "路线距离未记录", color = SageMuted, fontSize = 12.sp)
         }
     }
 }
@@ -1009,13 +1010,15 @@ fun ScrapbookPhoto(rawUri: String, contentDescription: String, modifier: Modifie
     val bitmap = remember(rawUri) {
         rawUri.takeIf { it.isNotBlank() }?.let { value ->
             runCatching {
-                context.contentResolver.openInputStream(Uri.parse(value))?.use(BitmapFactory::decodeStream)?.asImageBitmap()
+                cn.tsinghua.sagemotion.data.vision.PhotoAssets(context).decode(Uri.parse(value), 1280).asImageBitmap()
             }.getOrNull()
         }
     }
     if (bitmap != null) {
         Image(bitmap, contentDescription, modifier, contentScale = ContentScale.Crop)
-    } else {
+    } else if (rawUri.startsWith("fixed://") || LocalInspectionMode.current) {
         Image(painterResource(R.drawable.flower_stimulus), contentDescription, modifier, contentScale = ContentScale.Crop)
+    } else {
+        Box(modifier.background(SagePanelSoft), contentAlignment = Alignment.Center) { Text("照片不可用", color = SageMuted, fontSize = 12.sp) }
     }
 }

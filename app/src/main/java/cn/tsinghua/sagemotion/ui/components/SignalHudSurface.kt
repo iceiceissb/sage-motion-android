@@ -33,7 +33,7 @@ fun SignalHudSurface(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(22.dp),
     borderColor: Color = SageHudEdge,
-    shadowElevation: androidx.compose.ui.unit.Dp = 10.dp,
+    shadowElevation: androidx.compose.ui.unit.Dp = 6.dp,
     content: @Composable BoxScope.() -> Unit,
 ) {
     Surface(
@@ -60,12 +60,12 @@ fun SignalHudSurface(
                 var y = 14.dp.toPx()
                 while (y < size.height) {
                     drawLine(
-                        Color.White.copy(alpha = .018f),
+                        Color.White.copy(alpha = .009f),
                         Offset(0f, y),
                         Offset(size.width, y),
                         strokeWidth = .6.dp.toPx(),
                     )
-                    y += 17.dp.toPx()
+                    y += 24.dp.toPx()
                 }
                 drawLine(
                     SageSignalCyan.copy(alpha = .10f),
@@ -145,7 +145,7 @@ fun SignalContours(
             }
             drawPath(
                 path,
-                color.copy(alpha = .30f - index * .038f),
+                color.copy(alpha = .14f - index * .022f),
                 style = Stroke(width = 1.dp.toPx()),
             )
         }

@@ -61,7 +61,7 @@ val SagePaperMuted = SageMuted
 // ---- 数字公园信号层 ----
 /** 地图 HUD 的深墨底；只用于空间界面叠层，不替换真实高德底图。 */
 val SageHud = Color(0xFF0B1512)
-val SageHudEdge = Color(0xFF63766D).copy(alpha = .76f)
+val SageHudEdge = Color(0xFF63766D).copy(alpha = .48f)
 val SageHudMuted = Color(0xFFA9B4AE)
 
 /** 主行动、推荐路线与“正在感知”的唯一高能强调色。 */

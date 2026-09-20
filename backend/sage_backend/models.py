@@ -55,6 +55,8 @@ class AgentTaskRequest(StrictModel):
     request_id: str = Field(default_factory=lambda: uuid4().hex, pattern=r"^[A-Za-z0-9_-]{8,64}$")
     scenario: Scenario
     prompt: str = Field(min_length=1, max_length=2_000)
+    vision_is_region: bool = False
+    has_captured_photo: bool = False
     vision_findings: list[VisionFinding] = Field(default_factory=list, max_length=20)
     vision_image_data_url: str | None = Field(
         default=None,

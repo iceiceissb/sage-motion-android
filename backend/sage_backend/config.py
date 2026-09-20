@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     )
     max_tool_rounds: int = Field(default=4, ge=1, le=8, validation_alias="SAGE_MAX_TOOL_ROUNDS")
     max_tool_calls: int = Field(default=8, ge=1, le=16, validation_alias="SAGE_MAX_TOOL_CALLS")
+    zine_enabled: bool = Field(default=False, validation_alias="SAGE_ZINE_ENABLED")
+    image_model: str = Field(default="gpt-image-2.5-sunburst", validation_alias="SAGE_IMAGE_MODEL")
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":

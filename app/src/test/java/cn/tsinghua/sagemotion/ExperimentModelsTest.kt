@@ -101,7 +101,7 @@ class ExperimentModelsTest {
 
     @Test
     fun adoptedAlternativeRouteSurvivesBeyondTheResultPanel() {
-        val state = ExperimentUiState(adoptedRoute = RouteChoice.ALTERNATIVE)
+        val state = ExperimentUiState(demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE, adoptedRoute = RouteChoice.ALTERNATIVE)
         assertEquals("草坪外环线", state.activeRouteName)
         assertEquals("林下连廊绕行线", state.copy(routeReplanned = true).activeRouteName)
     }

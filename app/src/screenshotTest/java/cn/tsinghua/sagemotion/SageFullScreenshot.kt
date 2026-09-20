@@ -1,5 +1,7 @@
 package cn.tsinghua.sagemotion
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import cn.tsinghua.sagemotion.model.AiStage
@@ -48,6 +50,7 @@ fun DemoCompleteWithIpScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 demoCompleted = true,
@@ -81,11 +84,13 @@ fun PostTaskSurveyScreenshot() {
 }
 
 @Preview(name = "SAGE Full Route Result", widthDp = 390, heightDp = 844, showBackground = true)
+@Preview(name = "Route Result Compact", widthDp = 360, heightDp = 740, fontScale = 1.15f, showBackground = true)
 @Composable
 fun SageFullRouteResultScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -93,7 +98,15 @@ fun SageFullRouteResultScreenshot() {
                 scenario = ExperimentScenario.ENVIRONMENT,
                 aiStage = AiStage.COMPLETE,
                 resultVisible = true,
-                taskResult = AiTaskResult("推荐：湖边林荫线", "沿湖步行，途经多个休息点。", "后半段遮阴信息不足", "开始路线 · 下一步", listOf("地图数据", "设施数据")),
+                taskResult = AiTaskResult(
+                    "推荐：湖边林荫线", "沿湖步行，途经多个休息点。", "后半段遮阴信息不足", "开始路线 · 下一步", listOf("地图数据", "设施数据"),
+                    alternativeTitle = "备选：草坪外环线",
+                    metrics = listOf(
+                        ResultMetric("12 分钟", "≈ 850 米"),
+                        ResultMetric("3 处座椅", "沿途可见"),
+                        ResultMetric("避开拥挤", "当前人流较少"),
+                    ),
+                ),
             ),
             onRunScenario = {},
             onCancel = {},
@@ -124,6 +137,7 @@ fun SageDualRouteCalculatingScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -148,6 +162,7 @@ fun SageFullVisualResultScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -174,6 +189,7 @@ fun SageVisualSignalExtractionScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -198,6 +214,7 @@ fun SemanticVoiceListeningScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -223,6 +240,7 @@ fun SageCreationWeavingScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -254,6 +272,7 @@ fun JourneyRouteStoryScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -285,6 +304,7 @@ fun JourneyProposedReplanScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -316,6 +336,7 @@ fun SageDynamicReplanningScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -336,11 +357,13 @@ fun SageDynamicReplanningScreenshot() {
 }
 
 @Preview(name = "Parallel Exploration Hub", widthDp = 390, heightDp = 844, showBackground = true)
+@Preview(name = "Exploration Hub Compact", widthDp = 360, heightDp = 740, fontScale = 1.15f, showBackground = true)
 @Composable
 fun ParallelExplorationHubScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -370,6 +393,7 @@ fun AlternativeRouteExplorationHubScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -397,6 +421,7 @@ fun RouteConstraintInputScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -421,6 +446,7 @@ fun CircleSearchAnswerScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -449,6 +475,7 @@ fun CircleSearchVoiceQuestionScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -475,6 +502,7 @@ fun VoiceManualInputScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -499,6 +527,7 @@ fun VoiceDiscoveryResultScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -538,6 +567,7 @@ fun ReplanRequestInputScreenshot() {
     SageMotionTheme {
         ExperimentScreen(
             state = ExperimentUiState(
+                demoMode = cn.tsinghua.sagemotion.model.DemoMode.EXPERIMENT_OFFLINE,
                 sessionStarted = true,
                 participantId = "P001",
                 order = ConditionOrder.ABC,
@@ -574,5 +604,51 @@ fun HistoryListScreenshot() {
             onDeleteSession = {},
             onDeleteAll = {},
         )
+    }
+}
+
+
+@Preview(name = "Zine Service Unconfigured", widthDp = 360, heightDp = 340, fontScale = 1.15f, showBackground = true)
+@Composable
+fun ZineServiceUnconfiguredScreenshot() {
+    SageMotionTheme {
+        androidx.compose.runtime.CompositionLocalProvider(
+            cn.tsinghua.sagemotion.ui.components.LocalJourneyBinding provides cn.tsinghua.sagemotion.ui.components.JourneyBinding(
+                ExperimentUiState(), { _, _ -> }, {}, {},
+            ),
+        ) {
+            androidx.compose.material3.Surface(color = cn.tsinghua.sagemotion.ui.theme.SagePanel, modifier = Modifier.fillMaxSize()) {
+                cn.tsinghua.sagemotion.ui.components.ZineGenerationPanel(null)
+            }
+        }
+    }
+}
+
+
+@Preview(name = "Live Single Route", widthDp = 360, heightDp = 740, fontScale = 1.15f, showBackground = true)
+@Composable
+fun LiveSingleRouteScreenshot() {
+    val points = listOf(cn.tsinghua.sagemotion.model.GeoPoint(40.017,116.326), cn.tsinghua.sagemotion.model.GeoPoint(40.02,116.331))
+    val route = cn.tsinghua.sagemotion.model.ParkRoutePlan("preview_route", "步行路线1", points, 640f, 540)
+    val result = cn.tsinghua.sagemotion.data.bindRouteResult(
+        AiTaskResult("", "", null, "采纳路线", emptyList()), listOf(route), null, false,
+    )
+    val state = ExperimentUiState(sessionStarted = true, scenario = ExperimentScenario.ENVIRONMENT,
+        aiStage = AiStage.COMPLETE, resultVisible = true, taskResult = result,
+        spatial = cn.tsinghua.sagemotion.model.JourneySpatialState(routes = listOf(route)))
+    SageMotionTheme {
+        androidx.compose.runtime.CompositionLocalProvider(
+            cn.tsinghua.sagemotion.ui.components.LocalJourneyBinding provides cn.tsinghua.sagemotion.ui.components.JourneyBinding(state, { _, _ -> }, {}, {}),
+        ) {
+            ExperimentScreen(
+                state = state,
+                onRunScenario = {}, onCancel = {}, onReset = {}, onAdopt = {},
+                onRestartDemo = {}, onFinishSession = {}, onEvidence = {}, onCloseEvidence = {},
+                onRouteSelected = {}, onScenarioSelected = {}, onConditionSelected = {}, onNextCondition = {},
+                onPreviewPrevious = {}, onPreviewNext = {}, onResearcherPanel = {}, onHistory = {},
+                onExport = {}, onExportAll = {}, onVoiceTranscript = {},
+                onCreatePhotoUri = { android.net.Uri.EMPTY }, onPhotoCaptured = {}, onShareJourney = {}, onBeginJourneySummary = {},
+            )
+        }
     }
 }

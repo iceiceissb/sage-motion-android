@@ -63,7 +63,7 @@ internal fun enrich(
 ): AiTaskResult {
     val scenario = request.scenario
     if (scenario == ExperimentScenario.VISUAL) {
-        return if (scripted.isLiveData) scripted else scripted.copy(
+        return if (request.hasCapturedPhoto || scripted.isLiveData) scripted else scripted.copy(
             sourceLabel = "离线固定视觉刺激 · 非实时识别",
             isLiveData = false,
         )

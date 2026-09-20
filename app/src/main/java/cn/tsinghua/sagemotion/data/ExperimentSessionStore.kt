@@ -14,6 +14,7 @@ import cn.tsinghua.sagemotion.model.VisionFinding
 import android.util.Base64
 
 data class RestoredSession(
+    val spatial: cn.tsinghua.sagemotion.model.JourneySpatialState,
     val participantId: String,
     val order: ConditionOrder,
     val demoMode: DemoMode,
@@ -45,6 +46,7 @@ data class RestoredSession(
     val taskMisoperationCount: Int,
     val taskAttemptCount: Int,
     val pendingPostTaskSurvey: TaskPerformance?,
+    val generatedZineName: String?,
 )
 
 class ExperimentSessionStore(context: Context) {
@@ -53,6 +55,8 @@ class ExperimentSessionStore(context: Context) {
     fun save(state: ExperimentUiState, logFileName: String?) {
         if (!state.sessionStarted || logFileName == null) return
         preferences.edit()
+            .putString("generated_zine_name", state.generatedZinePath?.let { java.io.File(it).name })
+            .putString("journey_spatial_v1", JourneySpatialCodec.encode(state.spatial))
             .putBoolean(KEY_ACTIVE, true)
             .putString(KEY_PARTICIPANT, state.participantId)
             .putString(KEY_ORDER, state.order.name)
@@ -112,6 +116,8 @@ class ExperimentSessionStore(context: Context) {
             )
         }
         return RestoredSession(
+            generatedZineName = preferences.getString("generated_zine_name", null),
+            spatial = JourneySpatialCodec.decode(preferences.getString("journey_spatial_v1", null)),
             participantId = participantId,
             order = restoredOrder,
             demoMode = enumValueOrDefault(

@@ -16,6 +16,7 @@ from .openai_gateway import OpenAIResponsesGateway
 from .security import SlidingWindowRateLimiter, authenticate_request
 from .sse import stream_agent_with_heartbeat
 from .tooling import ToolRegistry
+from .zine import ZineGateway, ZineRequest, ZineResult
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             tools = ToolRegistry(client)
             gateway = OpenAIResponsesGateway(client, resolved)
             app.state.agent = SagePrimaryAgent(gateway, tools, resolved)
+            app.state.zine = ZineGateway(client, resolved)
             yield
 
     application = FastAPI(
@@ -51,7 +53,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         content_length = request.headers.get("content-length")
         if content_length:
             try:
-                limit = 2 * 1024 * 1024 if request.url.path == "/v1/agent/tasks:stream" else 64 * 1024
+                limit = (
+                    2 * 1024 * 1024
+                    if request.url.path in {"/v1/agent/tasks:stream", "/v1/journey/zine"}
+                    else 64 * 1024
+                )
                 too_large = int(content_length) > limit
             except ValueError:
                 return JSONResponse(status_code=400, content={"detail": "invalid content-length"})
@@ -74,6 +80,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             status_code=code,
             content={"status": "ready" if resolved.has_openai_key else "missing_openai_key"},
         )
+
+    @application.get("/v1/capabilities")
+    async def capabilities(request: Request) -> dict[str, bool]:
+        authenticate_request(request, resolved)
+        return {"agent": resolved.has_openai_key, "zine": resolved.has_openai_key and resolved.zine_enabled}
+
+    @application.post("/v1/journey/zine", response_model=ZineResult)
+    async def generate_zine(task: ZineRequest, request: Request) -> ZineResult:
+        subject = authenticate_request(request, resolved)
+        await limiter.check(subject)
+        if not resolved.has_openai_key or not resolved.zine_enabled:
+            raise HTTPException(status_code=503, detail="image generation is not enabled")
+        try:
+            return await request.app.state.zine.generate(task)
+        except (httpx.HTTPError, ValueError, TimeoutError) as error:
+            # Provider bodies may contain sensitive inputs. Never expose or log them.
+            logger.warning("zine generation failed", extra={"failure_type": type(error).__name__})
+            raise HTTPException(
+                status_code=502, detail="image provider unavailable; no automatic retry"
+            ) from None
 
     @application.post("/v1/agent/tasks:stream")
     async def stream_task(task: AgentTaskRequest, request: Request) -> StreamingResponse:
